@@ -1,0 +1,9 @@
+__pycache__/
+.idea/
+.hypothesis/
+*.sage.py
+.vscode/
+build
+dist
+*.so
+*.DS_Store

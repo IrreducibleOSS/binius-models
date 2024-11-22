@@ -1,0 +1,5 @@
+[flake8]
+extend-ignore =
+    # See recommendation in https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#slices
+   E203
+max-line-length = 120
