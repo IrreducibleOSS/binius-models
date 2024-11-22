@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "binius-models"
+version = "0.1.0"
+description = "Models of Binius algorithms"
+authors = ["Irreducible Team <opensource@irreducible.com>"]
+readme = "README.md"
+packages = [{include = "binius_models"}]
+exclude=["*.sage.py", "binius_models/sage/sageside"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^1.24.3"
+tqdm = "^4.65.0"
+galois = "^0.3.5"
+sympy = "1.12.1"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "1.10.0"
+black = "^23.3.0"
+ipython = "^8.14.0"
+pytest = "^7.3.2"
+types-tqdm = "^4.65.0.1"
+hypothesis = "^6.81.1"
+pre-commit = "^3.3.3"
+pytest-xdist = "^3.3.1"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "sage: marks tests as requiring the SageMath interpreter",
+    "serial",
+    "parametrize_hypothesis: parametrize tests with hypothesis",
+    "fast: marks fast version of slow tests",
+]
+
+[tool.black]
+line-length = 120
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
