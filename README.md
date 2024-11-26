@@ -42,7 +42,7 @@ Check that the `pyenv` local version is correct:
 
 ```bash
 $ pyenv version
-3.11.4 (set by <CWD>/.python-version)
+3.13.0 (set by <CWD>/.python-version)
 ```
 
 Set up the poetry environment using `pyenv`:
