@@ -2,7 +2,7 @@
 
 Binius Models is a collection of Python models of cryptographic algorithms and protocols. They are intended for purposes of readability and communication rather than high-performance.
 
-For now, the goal is to present a minimal implementation of FRI-Binius, a multilinear polynomial commitment scheme over binary tower fields, developed in [DP24](https://eprint.iacr.org/2024/504.pdf). Also included is an implementation of the Vision hash function, as developed in [AMPŠ24](https://eprint.iacr.org/2024/633).
+For now, the goal is to present a minimal implementation of FRI-Binius, a multilinear polynomial commitment scheme over binary tower fields, developed in [DP24](https://eprint.iacr.org/2024/504.pdf). Also included is an implementation of the Vision Mark-32 hash function, as developed in [AMPŠ24](https://eprint.iacr.org/2024/633).
 
 ## Dependencies
 
