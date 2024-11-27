@@ -64,7 +64,7 @@ class FRIBinius:  # (Generic[F])
                 eq_r[1 << i | h] = eq_r[h] * r[i]
                 eq_r[h] -= eq_r[1 << i | h]
         # todo: is there a faster way to do sumcheck that exploits the structure of and_r?
-        self.sumcheck = Sumcheck([self.multilinear, eq_r], composition)
+        self.sumcheck = Sumcheck([self.multilinear, eq_r], composition, False)
 
     def advance_state(self) -> list[Elem128b]:
         return self.sumcheck.compute_round_polynomial()

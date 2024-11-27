@@ -64,7 +64,7 @@ class RingSwitching:
             for i in range(1 << self.fri_binius.var)
         ]
         composition_poly = Polynomial128(2, {tuple([1, 1]): LargeFieldElem.one()})
-        self.sumcheck = Sumcheck([self.fri_binius.multilinear, a], composition_poly)
+        self.sumcheck = Sumcheck([self.fri_binius.multilinear, a], composition_poly, False)
         # compute ŝ := φ₁(t')(φ₀(r_κ), … , φ₀(r_{ℓ − 1})), which is an element of A := L ⊗_K L.
         tensor_expansion_second_chunk_r = tensor_expansion(r[self.kappa :])
         column_representation_s_hat = [

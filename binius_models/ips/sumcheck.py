@@ -11,21 +11,29 @@ from ..utils.utils import is_power_of_two
 
 
 class Sumcheck:
-    def __init__(self, multilinears: list[list[Elem128b]], composition: Polynomial128) -> None:
-        # polynomials: a list of _multilinear_ polynomials, of equal sizes.
-        # we're going to run sumcheck, where g is the product of the given multilinear polynomials.
-        # each is given as a list of coefficients in the Lagrange basis, where these coefficients are 𝔽₂-elements
-        self.multilinears = multilinears
-        self.composition = composition
+    """
+    multilinears: a list of _multilinear_ polynomials, of equal sizes.
+
+    high_to_low: Is the data represented in first-variable major (experimental) order?.
+    In high-to-low order, positions being folded together are half the multilinear apart instead of adjacent.
+
+    we're going to run sumcheck, where g is the product of the given multilinear polynomials.
+    each is given as a list of coefficients in the Lagrange basis, where these coefficients are 𝔽₂-elements
+    """
+
+    def __init__(self, multilinears: list[list[Elem128b]], composition: Polynomial128, high_to_low: bool) -> None:
         length = len(multilinears[0])
         assert is_power_of_two(length)
-        self.v = int(math.log2(length))
         assert all(len(multilinear) == length for multilinear in multilinears)  # multilinears are of equal lengths
         assert composition.variables == len(multilinears)  # number of multilinears is same as num vars of composition
+        self.v = int(math.log2(length))
+        self.multilinears = multilinears
+        self.composition = composition
         self.round = 0
         self.switchover = compute_switchover(self.v, composition.degree, 100)
         self.tensor = [Elem128b.one()] + [Elem128b.zero()] * ((1 << self.switchover) - 1)
         self._precompute_barycentric_weights()
+        self.high_to_low = high_to_low
 
     def _precompute_barycentric_weights(self) -> None:
         # begin precomputation of barycentric constants; see https://people.maths.ox.ac.uk/trefethen/barycentric.pdf
@@ -55,20 +63,35 @@ class Sumcheck:
                     if self.round > self.switchover or self.round == 0:  # just copy `multilinears`; do nothing to it.
                         folds[j][idx] = self.multilinears[j][idx]  # no-op, do just copy.
                     else:
-                        folds[j][idx] = sum(
-                            (
-                                self.tensor[h] * self.multilinears[j][idx << self.round | h]
-                                for h in range(1 << self.round)
-                            ),
-                            Elem128b.zero(),  # NOTE: this whole thing above is a base * extension dot product.
-                        )
+                        if self.high_to_low:
+                            folds[j][idx] = sum(
+                                (
+                                    self.tensor[h << self.switchover - self.round]
+                                    * self.multilinears[j][h << round_v | idx]
+                                    for h in range(1 << self.round)
+                                ),
+                                Elem128b.zero(),  # NOTE: this whole thing above is a base * extension dot product.
+                            )
+                        else:
+                            folds[j][idx] = sum(
+                                (
+                                    self.tensor[h] * self.multilinears[j][idx << self.round | h]
+                                    for h in range(1 << self.round)
+                                ),
+                                Elem128b.zero(),  # NOTE: this whole thing above is a base * extension dot product.
+                            )
                     # which indices into self.multilinears[j] do we care about? the index we want is as follows:
                     # [ _____i (v - 1 - self.round bits)_____  ||  _k (1 bit)_  ||  _____h (self.round bits)_____ ]
                     # you can see that the total bit-width of our index is v bits, which is what we want.
 
         for i in range(1 << round_v - 1):
             # some shorthand; there is no new computation here...
-            arguments = [[folds[j][i << 1 | k] for j in range(self.composition.variables)] for k in range(2)]
+            if self.high_to_low:
+                arguments = [
+                    [folds[j][k << round_v - 1 | i] for j in range(self.composition.variables)] for k in range(2)
+                ]
+            else:
+                arguments = [[folds[j][i << 1 | k] for j in range(self.composition.variables)] for k in range(2)]
             evaluations[0] += self.composition.evaluate(arguments[1])
             for k in range(2, self.composition.degree + 1):
                 argument = [  # note: each Elem128b(k) below will live in a small field! implement it as such.
@@ -84,17 +107,30 @@ class Sumcheck:
     def receive_challenge(self, r: Elem128b) -> None:
         round_v = self.v - self.round
         if self.round < self.switchover:  # expand tensor
-            for h in range(1 << self.round):
-                idx0 = h
-                idx1 = idx0 | 1 << self.round
-                self.tensor[idx1] = self.tensor[idx0] * r
-                self.tensor[idx0] -= self.tensor[idx1]
+            if self.high_to_low:
+                for h in range(1 << self.round):
+                    idx0 = h << self.switchover - self.round
+                    idx1 = idx0 | 1 << self.switchover - self.round - 1
+                    self.tensor[idx1] = self.tensor[idx0] * r
+                    self.tensor[idx0] -= self.tensor[idx1]
+            else:
+                for h in range(1 << self.round):
+                    idx0 = h
+                    idx1 = idx0 | 1 << self.round
+                    self.tensor[idx1] = self.tensor[idx0] * r
+                    self.tensor[idx0] -= self.tensor[idx1]
         else:  # classical folding
             for j in range(self.composition.variables):
-                self.multilinears[j] = [
-                    linearly_interpolate((self.multilinears[j][i << 1], self.multilinears[j][i << 1 | 1]), r)
-                    for i in range(1 << round_v - 1)
-                ]
+                if self.high_to_low:
+                    self.multilinears[j] = [
+                        linearly_interpolate((self.multilinears[j][i], self.multilinears[j][1 << round_v - 1 | i]), r)
+                        for i in range(1 << round_v - 1)
+                    ]
+                else:
+                    self.multilinears[j] = [
+                        linearly_interpolate((self.multilinears[j][i << 1], self.multilinears[j][i << 1 | 1]), r)
+                        for i in range(1 << round_v - 1)
+                    ]
         self.round += 1
 
     def interpolate(self, evaluations: list[Elem128b], point: Elem128b) -> Elem128b:

@@ -5,9 +5,9 @@ from .sumcheck import Sumcheck
 from .utils import Elem8b, Elem128b, Polynomial128
 
 
-def run_test(v, d, composition):
+def run_test(v, d, composition, high_to_low):
     multilinears = [[Elem128b(Elem8b.random().value) for _ in range(1 << v)] for _ in range(d)]
-    sumcheck = Sumcheck(multilinears, composition)
+    sumcheck = Sumcheck(multilinears, composition, high_to_low)
 
     claim = sumcheck.sum()
     for _ in range(sumcheck.v):
@@ -16,6 +16,7 @@ def run_test(v, d, composition):
         challenge = Elem128b.random()
         sumcheck.receive_challenge(challenge)
         claim = sumcheck.interpolate(evaluations, challenge)
+
     assert sumcheck.query() == claim
 
 
@@ -24,7 +25,8 @@ def test_1_5() -> None:
     v = 5
     d = 1
     composition = Polynomial128(d, {tuple([1] * d): Elem128b.one()})  # identity polynomial on 1 variable
-    run_test(v, d, composition)
+    for high_to_low in [True, False]:
+        run_test(v, d, composition, high_to_low)
 
 
 def test_3_5() -> None:
@@ -32,7 +34,8 @@ def test_3_5() -> None:
     v = 5
     d = 3
     composition = Polynomial128(d, {tuple([1] * d): Elem128b.one()})  # product monomial on d variables.
-    run_test(v, d, composition)
+    for high_to_low in [True, False]:
+        run_test(v, d, composition, high_to_low)
 
 
 def test_4_8() -> None:
@@ -41,7 +44,8 @@ def test_4_8() -> None:
     d = 8
     multidegree = tuple(1 if x % 5 == 0 else 0 for x in range(d))
     composition = Polynomial128(d, {multidegree: Elem128b.one()})  # product monomial on d variables.
-    run_test(v, d, composition)
+    for high_to_low in [True, False]:
+        run_test(v, d, composition, high_to_low)
 
 
 @pytest.mark.slow
@@ -50,7 +54,8 @@ def test_5_7() -> None:
     v = 7
     d = 5
     composition = Polynomial128(d, {tuple([1] * d): Elem128b.one()})  # product monomial on d variables.
-    run_test(v, d, composition)
+    for high_to_low in [True, False]:
+        run_test(v, d, composition, high_to_low)
 
 
 @pytest.mark.slow
@@ -65,7 +70,8 @@ def test_3_5_other_composition() -> None:
             (1, 2, 3): Elem128b.one(),
         },
     )  # 3-variate polynomial: X₀ ⋅ X₁² ⋅ X₂³ + 0xaeaeaeaeaeaeaeaebdbdbdbdbdbdbdbd
-    run_test(v, d, composition)
+    for high_to_low in [True, False]:
+        run_test(v, d, composition, high_to_low)
 
 
 @pytest.mark.slow
@@ -80,4 +86,5 @@ def test_3_5_crazy() -> None:
             (2, 3, 10): Elem128b.one(),
         },
     )
-    run_test(v, d, composition)
+    for high_to_low in [True, False]:
+        run_test(v, d, composition, high_to_low)
