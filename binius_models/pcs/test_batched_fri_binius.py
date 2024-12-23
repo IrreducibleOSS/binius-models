@@ -14,6 +14,7 @@ def test_batched_fri_binius(sizes, log_rate):
         claims.append(claim)
 
     batched_fri_binius = BatchedFRIBinius(Elem128b, log_rate, claims)
+    positions = batched_fri_binius.positions
     batched_fri_binius.commit()
 
     batching_randomness = Elem128b.random()
@@ -23,18 +24,6 @@ def test_batched_fri_binius(sizes, log_rate):
     for claim in sorted(claims, key=lambda claim: claim.sumcheck.v):
         s += randomness * claim.value  # right now, value is being computed; really, it will "come to us" as a claim.
         randomness *= batching_randomness
-
-    # we are going to prepare the way for the verifier with a bit of bookkeeping trickiness.
-    # this gives us a dictionary where: key == a possible round index, so in {0, ..., total_composition_vars - 1},
-    # and value tells us, "which index idx, into our main list of claims, is minimal, such that claims[idx].v ≤ key?"
-    # this turns out to be necessary below during our "piecewise reconstruction" routine. we do an on-the-fly idea
-    # where this information tells us where to "start interpolating stray pieces of our piecewise thing".
-    positions = {}
-    position = len(claims)
-    for i in range(batched_fri_binius.var):
-        while position > 0 and claims[position - 1].sumcheck.v <= i:
-            position -= 1
-        positions[i] = position
 
     batched_fri_binius.initialize(batching_randomness)
 
@@ -46,9 +35,10 @@ def test_batched_fri_binius(sizes, log_rate):
         s = batched_fri_binius.manager.claims[0].sumcheck.interpolate(round_polynomial, challenge)
 
         evaluations = batched_fri_binius.receive_challenge(challenge)
-        filtered_claims = [claim for claim in claims if claim.sumcheck.v == i + 1]
-        assert len(evaluations) == len(filtered_claims)  # they sent us the right number of evaluations this round.
-        for evaluation, claim in zip(evaluations, filtered_claims):
+        assert len(evaluations) == positions[i] - positions[i + 1]
+        for j in range(positions[i + 1], positions[i]):
+            claim = claims[j]
+            evaluation = evaluations[j - positions[i + 1]]  # this + the above is really just a zip in disguise
             s -= randomness * evaluation * claim.sumcheck.multilinears[1][0]  # prune off sumcheck component
             # WHAT'S GOING ON HERE? claim.multilinears[1] is a dummy mock for the eq_indicator.
             # in practice we will compute its value at (r₀, … , rᵢ) ourselves, using a succinct local computation.
@@ -56,7 +46,7 @@ def test_batched_fri_binius(sizes, log_rate):
             # evaluation of course is their nondeterministically claimed value for the actual value of the multilinear.
             randomness *= batching_randomness
             claim.evaluation = evaluation  # some datastructure business, for the verifier to store this locally.
-        j = positions[i]
+        j = positions[i]  # exactly the "end" of the above loop
         while j < len(claims):
             claim = claims[j]
             zeroth = claim.evaluation

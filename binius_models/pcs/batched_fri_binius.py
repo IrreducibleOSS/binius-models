@@ -70,6 +70,18 @@ class BatchedFRIBinius:  # (Generic[F])
         self.oracle = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
 
+        # we are going to prepare the way for the verifier with a bit of bookkeeping trickiness.
+        # this gives us a dictionary where: key == a possible round index, so in {0, ..., total_composition_vars - 1},
+        # and value tells us, which index idx, into our main list of claims, is minimal, such that claims[idx].v ≤ key?
+        # this turns out to be necessary below during our "piecewise reconstruction" routine. we do an on-the-fly idea
+        # where this information tells us where to "start interpolating stray pieces of our piecewise thing".
+        self.positions = {}
+        position = len(claims)
+        for i in range(self.var + 1):
+            while position > 0 and claims[position - 1].sumcheck.v <= i:
+                position -= 1
+            self.positions[i] = position
+
     def _fold(self, position: Elem128b, values: tuple[Elem128b, Elem128b], r: Elem128b) -> Elem128b:
         mult = [values[0], values[1]]
         mult[1] += mult[0]
@@ -99,8 +111,7 @@ class BatchedFRIBinius:  # (Generic[F])
             next_round_oracle[u] = self._fold(self._get_preimage(i, u), values, r)
         self.manager.receive_challenge(r)
         self.oracle.commit(next_round_oracle)
-        evaluations = [claim.sumcheck.multilinears[0][0] for claim in self.claims if claim.sumcheck.v == i + 1]
-        return evaluations
+        return [self.claims[j].sumcheck.multilinears[0][0] for j in range(self.positions[i + 1], self.positions[i])]
 
     def finalize(self) -> Elem128b:
         return self.oracle.vectors[self.var][0]
