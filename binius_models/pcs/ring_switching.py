@@ -6,11 +6,11 @@
 # a FRI-Binius instance. In particular, the latter instantiates an end-to-end protocol.
 
 # After one shot, one is reduced to a multilinear evaluation claim over
-# A:=L\otimes_K L. We then run a sort of induced "row-batched" sumcheck.
+# A := L ⊗_K L. We then run a sort of induced "row-batched" sumcheck.
 # The source for this material is Sections 4 and 5 of [DP24], which has as antecedent [D24].
 
-# A word on notation. In [DP24], s_hat is the A-valued evaluation
-# of the multilinear and s_0 is the row-batched version of this claim. We follow this notation.
+# A word on notation. In [DP24], ŝ is the A-valued evaluation
+# of the multilinear and s₀ is the row-batched version of this claim. We follow this notation.
 
 # [DP24]: https://eprint.iacr.org/2024/504.pdf
 # [D24]: https://hackmd.io/@benediamond/BJgKxUau0
@@ -21,9 +21,9 @@ from ..ips.sumcheck import Sumcheck
 from ..ips.utils import Polynomial128
 from .fri_binius import FRIBinius
 
-# This code again fixes L / K to be F_{2^128}/F_{2^8} via the below imports.
+# This code again fixes L / K to be 𝔽_{2¹²⁸} / 𝔽_{2⁸} via the below imports.
 # In particular, to work with different fields, one must also change the code in
-# the tensor_alg.py, sumcheck.py and fri_binius.py files.
+# the `tensor_alg.py`, `sumcheck.py` and `fri_binius.py` files.
 from .tensor_alg import (
     LargeFieldElem,
     SmallFieldElem,
@@ -95,9 +95,8 @@ class RingSwitching:
         return self.sumcheck.multilinears[0][0]  # should equal s' === t'(r')!!!
 
 
-# Given r:=(r_0,...,r_{N-1}), compute the "tensor expansion":
-# \otimes_i (1-r_i, r_i). This will be a list of length 2^N.
-# note: the general formula is \vec{v}\otimes (x, y):= x\vec{v} | y\vec{v}.
+# Given r := (r₀, … , r_{ℓ − 1}), compute the "tensor expansion":
+# ⨂_{i = 0}^{ℓ − 1} (1 – rᵢ, rᵢ). This will be a list of length 2^ℓ.
 def tensor_expansion(r: list[LargeFieldElem]) -> list[LargeFieldElem]:
     result = [LargeFieldElem.one()] + [LargeFieldElem.zero()] * ((1 << len(r)) - 1)
     for i in range(len(r)):

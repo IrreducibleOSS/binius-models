@@ -7,23 +7,23 @@
 
 from typing import Tuple
 
-# Right now, the code is set up for K = F_{2^8} and L = F_{2^128}.
+# Right now, the code is set up for K = 𝔽_{2⁸} and L = 𝔽_{2¹²⁸}
 # To maintain a semblance of modularity, we use SmallFieldElem to refer
 # to elements of K and LargeFieldElem to refer to elements of L.
 from ..ips.utils import Elem8b as SmallFieldElem
 from ..ips.utils import Elem128b as LargeFieldElem
 
 
-# Information about L/K.
+# Information about L / K.
 def degree_parameters() -> Tuple[int, int, int, int]:
     large_degree = LargeFieldElem.field.degree
     small_degree = SmallFieldElem.field.degree
-    relative_degree = large_degree // small_degree  # We will often write n = 2^{kappa} for the relative degree
+    relative_degree = large_degree // small_degree  # We will often write n = 2^κ for the relative degree
     kappa = relative_degree.bit_length() - 1
     return (large_degree, small_degree, relative_degree, kappa)
 
 
-# An element of L⊗_K L.
+# An element of L ⊗_K L.
 class TensorAlgElem:
     # We explicitly encode L/K and the attendant numerical information.
     large_field = LargeFieldElem.field
@@ -31,9 +31,9 @@ class TensorAlgElem:
     (large_degree, small_degree, relative_degree, kappa) = degree_parameters()
 
     def __init__(self, matrix: list[list[SmallFieldElem]]):
-        # the representation of the element of L⊗_K L as a matrix with coefficients in K,
-        # with respect to the basis \beta_i⊗ \beta_j. However, we won't explicitly
-        # need the basis \{\beta_i\}.
+        # the representation of the element of L ⊗_K L as a matrix with coefficients in K,
+        # with respect to the basis βᵢ ⊗ βⱼ. However, we won't explicitly
+        # need the basis (βᵢ).
         assert len(matrix) == self.relative_degree
         assert all(len(matrix[i]) == self.relative_degree for i in range(self.relative_degree))
         self.matrix = matrix
@@ -85,9 +85,9 @@ class TensorAlgElem:
             ]
         )
 
-    # swap is the function defined on simple tensors sends x⊗ y to y⊗ x and extended linearly.
-    # swap only makes sense because we are working with L⊗_K L. (In other words, it wouldn't
-    # make sense with L⊗_K L' for some other extension L'/K.)
+    # swap is the function defined on simple tensors sends x ⊗ y to y ⊗ x and extended linearly.
+    # swap only makes sense because we are working with L ⊗_K L. (In other words, it wouldn't
+    # make sense with L ⊗_K L' for some other extension L' / K.)
     def swap(self) -> "TensorAlgElem":
         return TensorAlgElem(
             [[self.matrix[j][i] for j in range(self.relative_degree)] for i in range(self.relative_degree)]
@@ -126,15 +126,15 @@ class TensorAlgElem:
             [[self.matrix[i][j] * k for j in range(self.relative_degree)] for i in range(self.relative_degree)]
         )
 
-    # recall that \phi_0:L->A is the map sending x|-> x⊗1
-    # if a\in A and x\in L, this computes \phi_0(x)a\in A.
+    # recall that φ₀ : L → A is the map sending x ↦ x ⊗ 1
+    # if a ∈ A and x ∈ L, this computes φ₀(x) ⋅ a ∈ A.
     def mul_by_phi_0(self, x: LargeFieldElem) -> "TensorAlgElem":
         old_columns = self.column_representation()
         new_columns = [old_columns[i] * x for i in range(self.relative_degree)]
         return self.from_column_representation(new_columns)
 
-    # recall that \phi_1:L->A is the map sending y|-> 1⊗y
-    # if a\in A and y\in L, this computes \phi_1(y)a\in A
+    # recall that φ₁ : L → A is the map sending y ↦ 1 ⊗ y
+    # if a ∈ A and y ∈ L, this computes φ₁(y) ⋅ a ∈ A
     def mul_by_phi_1(self, y: LargeFieldElem) -> "TensorAlgElem":
         old_rows = self.row_representation()
         new_rows = [old_rows[i] * y for i in range(self.relative_degree)]
@@ -143,7 +143,7 @@ class TensorAlgElem:
 
 # Expand a LargeFieldElem into a vector of SmallFieldElem.
 # More precisely, in our internal representation, there is an implicit basis:
-# \beta_0, \beta_1, ..., \beta_{relative_degree-1} for L/K. This function takes
+# β₀, β₁, … , β_{κ − 1} for L / K. This function takes
 # an element of L and returns its coordinates in this basis.
 def small_field_expansion(elem: LargeFieldElem) -> list[SmallFieldElem]:
     val = elem.value
@@ -154,7 +154,7 @@ def small_field_expansion(elem: LargeFieldElem) -> list[SmallFieldElem]:
 
 # Recombine a vector of SmallFieldElem into a LargeFieldElem.
 # As in `small_field_expansion`, we assume that the input is given with respect
-# a god-given basis: \beta_0, \beta_1, ..., \beta_{relative_degree-1} for L/K.
+# a god-given basis: β₀, β₁, … , β_{κ − 1} for L / K.
 def large_field_recombination(expansion: list[SmallFieldElem]) -> LargeFieldElem:
     (_, small_degree, relative_degree, _) = degree_parameters()
     assert len(expansion) == relative_degree, "wrong length"
@@ -164,7 +164,7 @@ def large_field_recombination(expansion: list[SmallFieldElem]) -> LargeFieldElem
     return LargeFieldElem(val)
 
 
-# Generate the canonical basis for L/K.
+# Generate the canonical basis for L / K.
 def generate_relative_basis() -> list[LargeFieldElem]:
     (_, small_degree, relative_degree, _) = degree_parameters()
     return [LargeFieldElem(1 << small_degree * i) for i in range(relative_degree)]
