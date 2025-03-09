@@ -99,12 +99,9 @@ class Vision(ABC, Generic[E]):
             state = [x + y for x, y in zip(state, self.key_schedule[1 + r])]
         return state
 
-    def sponge_init(self, msg_len_bytes: int) -> None:
+    def sponge_init(self) -> None:
         self.set_zero_schedule()
         self.state = [self.elem.zero() for _ in range(self.m)]
-        x = msg_len_bytes.to_bytes(8, "little")
-        self.state[self.r] = self.elem.from_bytes(x[0:4])
-        self.state[self.r + 1] = self.elem.from_bytes(x[4:8])
 
     def sponge_absorb(self, rate: list[E]) -> None:
         assert len(rate) == self.r
@@ -121,11 +118,22 @@ class Vision(ABC, Generic[E]):
     def sponge_hash(self, message: list[E]) -> list[E]:
         """This assumes the fixed length is the length of the message"""
         msg_len_bytes = len(message) * self.elem.field.bytes_len
-        # pad input
-        if len(message) % self.r != 0:
-            message += [self.elem.zero() for _ in range(self.r - len(message) % self.r)]
+        
+        # pad input using Keccak padding scheme
+        padding_len = self.r - (len(message) % self.r)
+        padding_bytes = [0] * padding_len * self.elem.field.bytes_len
+        padding_bytes[0] |= 1
+        padding_bytes[-1] |= 0b10000000
 
-        self.sponge_init(msg_len_bytes)
+        padding_chunks = [
+            padding_bytes[i : i + self.elem.field.bytes_len]
+            for i in range(0, len(padding_bytes), self.elem.field.bytes_len)
+        ]
+
+        padding_elements = [self.elem.from_bytes(bytes(chunk)) for chunk in padding_chunks]
+        message.extend(padding_elements)
+
+        self.sponge_init()
         for left in range(0, len(message), self.r):
             self.sponge_absorb(message[left : left + self.r])
         return self.sponge_squeeze()
