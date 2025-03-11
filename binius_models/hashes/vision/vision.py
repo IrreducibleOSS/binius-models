@@ -122,8 +122,8 @@ class Vision(ABC, Generic[E]):
         # pad input using Keccak padding scheme
         padding_len = self.r - (len(message) % self.r)
         padding_bytes = [0] * padding_len * self.elem.field.bytes_len
-        padding_bytes[0] |= 1
-        padding_bytes[-1] |= 0b10000000
+        padding_bytes[0] |= 0b10000000
+        padding_bytes[-1] |= 0b00000001
 
         padding_chunks = [
             padding_bytes[i : i + self.elem.field.bytes_len]
