@@ -26,13 +26,8 @@ jobs:
         uses: pre-commit/action@v3.0.1
 
   test-python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-
-      - name: Install system dependencies
-        run: |
-            sudo apt-get update
-            sudo apt-get install -y llvm-dev
 
       - name: Checkout repository
         uses: actions/checkout@v4
