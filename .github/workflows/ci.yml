@@ -29,6 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
+      - name: Install system dependencies
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y llvm-dev
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -44,6 +49,8 @@ jobs:
 
       - name: Install the project dependencies
         run: |
+          poetry env use $(which python3)
+          poetry env info
           poetry install --with dev
           poetry env info
 
