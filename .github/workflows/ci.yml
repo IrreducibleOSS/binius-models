@@ -27,6 +27,8 @@ jobs:
 
   test-python:
     runs-on: ubuntu-22.04
+    env:
+      PY_COLORS: 1
     steps:
 
       - name: Install system dependencies
