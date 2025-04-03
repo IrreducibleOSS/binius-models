@@ -24,3 +24,29 @@ jobs:
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
+
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v5
+
+      - name: Set up Poetry
+        uses: abatilo/actions-poetry@v4
+        with:
+          poetry-version: latest
+
+      - name: Install the project dependencies
+        run: |
+          poetry install --with dev
+          poetry env info
+
+      - name: Run Python Test
+        run: |
+          poetry run pytest -m "not slow"
