@@ -1,0 +1,61 @@
+name: 'CI Tests'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.event_name }}-${{ github.ref }}-ci
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v5
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  test-python:
+    runs-on: ubuntu-22.04
+    env:
+      PY_COLORS: 1
+    steps:
+
+      - name: Install system dependencies
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y llvm-dev libclang-dev clang
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v5
+
+      - name: Set up Poetry
+        uses: abatilo/actions-poetry@v4
+        with:
+          poetry-version: latest
+
+      - name: Install the project dependencies
+        run: |
+          poetry env use $(which python3)
+          poetry env info
+          poetry install --with dev
+          poetry env info
+
+      - name: Run Python Test
+        run: |
+          poetry run pytest -m "not slow"
