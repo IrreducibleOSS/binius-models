@@ -35,14 +35,14 @@ Then set the environment variable `export SAGE_IN_DOCKER=1` before running tests
 With pyenv correctly installed and configured, install the currently used version of Python:
 
 ```bash
-$ pyenv install
+$ pyenv install  # this will install Python 3.12 (set in ./.python-version)
 ```
 
 Check that the `pyenv` local version is correct:
 
 ```bash
 $ pyenv version
-3.13.0 (set by <CWD>/.python-version)
+3.12.9 (set by <CWD>/.python-version)
 ```
 
 Set up the poetry environment using `pyenv`:
