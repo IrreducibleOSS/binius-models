@@ -37,7 +37,7 @@ def test_simple():
     ctx = Vision32b()
     ctx.set_zero_schedule()
     out = ctx.sponge_hash([ctx.elem.from_bytes(b"\xde\xad\xbe\xef")])
-    expected = bytes.fromhex("69e1764144099730124ab8ef1414570895ae9de0b74dedf364c72d118851cf65")
+    expected = bytes.fromhex("8ed389809fabe91cead4786eb08e2d32647a9ac69143040de500e4465c72f173")
     expected_as_elems = [ctx.elem.from_bytes(expected[i : i + 4]) for i in range(0, len(expected), 4)]
     assert expected_as_elems == out
 
@@ -53,7 +53,7 @@ def test_multi_aligned():
     data = msg.encode("utf-8")
     message = [ctx.elem.from_bytes(data[i : i + 4]) for i in range(0, len(data), 4)]
     out = ctx.sponge_hash(message)
-    expected = bytes.fromhex("6ade8ba2a45a070a3abaff6f1bf9483686c78d4afca2d0d8d3c7897fdfe2df91")
+    expected = bytes.fromhex("b615664d0249149b5655a86919169f0fd4b44fec83d4c43e4f1f124c3f9a82c3")
     expected_as_elems = [ctx.elem.from_bytes(expected[i : i + 4]) for i in range(0, len(expected), 4)]
     assert expected_as_elems == out
 
@@ -67,6 +67,6 @@ def test_multi_unaligned():
     data = msg.encode("utf-8")
     message = [ctx.elem.from_bytes(data[i : i + 4]) for i in range(0, len(data), 4)]
     out = ctx.sponge_hash(message)
-    expected = bytes.fromhex("2819814fd9da83ab358533900adaf87f4c9e0f88657f572a9a6e83d95b88a9ea")
+    expected = bytes.fromhex("0aa2879dcac953550ebe5d9da2a91d3c0356feca9044acf4edca87b28d9959e1")
     expected_as_elems = [ctx.elem.from_bytes(expected[i : i + 4]) for i in range(0, len(expected), 4)]
     assert expected_as_elems == out
