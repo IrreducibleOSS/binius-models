@@ -244,7 +244,6 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         # its columns will be the bit-decompositions in the FP basis of α² + α, for α varying through an 𝔽₂-basis of 𝒯_ι
         products = field.Zeros((1, 1))
         while True:
-            # invariant: it's the number of vectors we still need to add.
             iota += 1
             # begin construction of tower level ι.
             products = np.pad(products, ((0, 1 << iota - 1), (0, 0)), mode="constant", constant_values=0)
