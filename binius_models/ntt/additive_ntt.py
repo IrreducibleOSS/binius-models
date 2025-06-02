@@ -231,7 +231,7 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         def _column_to_field(column):
             return self.field(sum(column.tolist()[i][0] << i for i in range(1 << iota)))
 
-        def _solve_underdermined_system(products, affine_constant):
+        def _solve_underdetermined_system(products, affine_constant):
             # the matrices we call this on are guaranteed to be 0 in the leftmost column, and elsewhere of full rank.
             augmented = galois.FieldArray.row_reduce(np.hstack((products, affine_constant)))
             return np.insert(augmented[:, -1][:-1], 0, 0).reshape(-1, 1)
@@ -257,7 +257,7 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
             # of the FAST constant monomial X_0 ⋅ ⋯ X_{ι − 2}. put that in your pipe and smoke it!
             affine_constant = _field_to_column(self.constants[0][(1 << iota - 1) - 1], iota)
 
-            solution = _solve_underdermined_system(products, affine_constant)
+            solution = _solve_underdetermined_system(products, affine_constant)
             fast_indeterminate = _column_to_field(solution)  # this is the image of FAST X_{ι – 1} in the FP tower
             for j in range(min(1 << iota - 1, initial_dimension - (1 << iota - 1))):
                 self.constants[0].append(self.constants[0][j] * fast_indeterminate)

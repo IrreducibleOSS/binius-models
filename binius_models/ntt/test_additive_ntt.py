@@ -137,3 +137,5 @@ def test_fancy_huge(Elem32b: type[BinaryTowerFieldElem]) -> None:
     max_log_h = 27
     log_h = 10
     ntt = FancyAdditiveNTT(Elem32b, max_log_h, 2)
+    input = [ntt.field.random() for _ in range(1 << log_h)]
+    assert ntt.encode(input) == ntt._naive_encode(input)
