@@ -39,9 +39,8 @@ class AdditiveNTT(Generic[F]):
             for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.constants[i - 1][0]))
         for i in range(self.max_log_h + skip_rounds):
-            for j in range(0, self.max_log_h + skip_rounds + self.log_rate - i):
+            for j in range(self.max_log_h + skip_rounds + self.log_rate - i - 1, -1, -1):
                 self.constants[i][j] /= self.constants[i][0]
-            self.constants[i].pop(0)
         self.constants = self.constants[skip_rounds:]
 
     def _s(self, element: F, constant: F) -> F:
@@ -103,7 +102,7 @@ class AdditiveNTT(Generic[F]):
         assert j in range(1 << log_h - 1 - i)
         return sum(
             (
-                self.constants[i][k]
+                self.constants[i][k + 1]
                 for k in range(self.max_log_h + self.log_rate - 1 - i)
                 if is_bit_set(coset << log_h - 1 - i | j, k)
             ),
@@ -209,11 +208,11 @@ class CantorAdditiveNTT(AdditiveNTT[F]):
     # and we can prune a few steps away from _precompute_constants.
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
         self.constants: list[list[F]] = [[]]
-        for i in range(1, self.max_log_h + skip_rounds + self.log_rate):
+        for i in range(self.max_log_h + skip_rounds + self.log_rate):
             self.constants[0].append(self.field(1 << i))
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - 1 - i):
+            for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.field.one()))
         self.constants = self.constants[skip_rounds:]
 
@@ -221,13 +220,13 @@ class CantorAdditiveNTT(AdditiveNTT[F]):
 class FancyAdditiveNTT(AdditiveNTT[F]):
     # for our S⁽⁰⁾, we're going to take the image in the Fan–Paar field OF the set < 1, 2, 4, ... > in the FAST field.
     # and we can prune a few steps away from _precompute_constants.
-    def _field_to_column(self, field_element, iota):
-        return np.array([(field_element.value >> i) & 1 for i in range(1 << iota)]).reshape(-1, 1)
+    def _field_to_column(self, element : F, iota : int) -> np.array:
+        return np.array([(element.value >> i) & 1 for i in range(1 << iota)]).reshape(-1, 1)
 
-    def _column_to_field(self, column, iota):
+    def _column_to_field(self, column : np.array, iota : int) -> F:
         return self.field(sum(column.tolist()[i][0] << i for i in range(1 << iota)))
 
-    def _solve_underdetermined_system(self, products, affine_constant, iota):
+    def _solve_underdetermined_system(self, products : np.array, affine_constant : np.array, iota : int) -> np.array:
         # the matrices we call this on are guaranteed to be 0 in the leftmost column, and elsewhere of full rank.
         # augmented = galois.FieldArray.row_reduce(np.hstack((products, affine_constant)))
         # return np.insert(augmented[:, -1][:-1], 0, 0).reshape(-1, 1)
@@ -281,7 +280,6 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
             for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.constants[i - 1][0]))
         for i in range(self.max_log_h + skip_rounds):
-            for j in range(0, self.max_log_h + skip_rounds + self.log_rate - i):
+            for j in range(self.max_log_h + skip_rounds + self.log_rate - i - 1, -1, -1):
                 self.constants[i][j] /= self.constants[i][0]
-            self.constants[i].pop(0)
         self.constants = self.constants[skip_rounds:]
