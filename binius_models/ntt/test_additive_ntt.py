@@ -138,9 +138,12 @@ def test_fancy_large() -> None:
     cantor = CantorAdditiveNTT(Elem32bFAST, max_log_h, 2)
     fancy = FancyAdditiveNTT(Elem32bFP, max_log_h, 2)
     input = [Elem16bFAST.random() for _ in range(1 << log_h)]
+
     def convert_element(element: Elem16bFAST) -> Elem16bFP:  # this is only for testing; it's an abuse of "constants"
         column = fancy._field_to_column(element, 4)
         return sum((fancy.constants[0][i] if column[i] else Elem16bFP.zero() for i in range(1 << 4)), Elem16bFP.zero())
+
     def convert_list(input: list[Elem16bFAST]) -> list[Elem16bFP]:
         return [convert_element(element) for element in input]
+
     assert fancy.encode(convert_list(input)) == convert_list(cantor.encode(input))
