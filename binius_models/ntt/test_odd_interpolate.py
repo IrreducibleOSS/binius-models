@@ -25,5 +25,4 @@ def test_odd_interpolate(Elem16b: type[BinaryTowerFieldElem], ell: int, d: int) 
     ntt = AdditiveNTT(Elem16b, log_h, 0)
     input = [interpolate.field.random() if i < d << ell else interpolate.field.zero() for i in range(1 << log_h)]
     encoding = ntt.encode(input)
-    result_of_interpolation = interpolate.interpolate(encoding[: d << ell])
-    assert result_of_interpolation == input[: d << ell]
+    assert interpolate.interpolate(encoding[: d << ell]) == input[: d << ell]

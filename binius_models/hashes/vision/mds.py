@@ -45,11 +45,11 @@ class VisionMDSTransformation(Generic[F]):
             # for the general interpolate algorithm, see `binius_crates::ntt::odd_interpolate` in the Binius code.
 
             stash[chunk_size | k] += stash[k]
-            temp_0 = constants[self.log_h][0] * stash[chunk_size | k]
+            temp_0 = constants[self.log_h][1] * stash[chunk_size | k]
             stash[chunk_size << 1 | k] += temp_0 + stash[k]
 
-            temp_1 = constants[self.log_h][1] * stash[chunk_size | k]
-            temp_2 = constants[self.log_h + 1][0] * stash[chunk_size << 1 | k]
+            temp_1 = constants[self.log_h][2] * stash[chunk_size | k]
+            temp_2 = constants[self.log_h + 1][1] * stash[chunk_size << 1 | k]
             result[k] += temp_0 + stash[chunk_size | k] + stash[chunk_size << 1 | k]
             result[chunk_size | k] = stash[k] + temp_1 + temp_2
             result[chunk_size << 1 | k] = result[chunk_size | k] + stash[chunk_size | k]
