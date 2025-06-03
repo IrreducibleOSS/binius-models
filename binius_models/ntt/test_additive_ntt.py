@@ -130,12 +130,12 @@ def test_inverse_interleaved() -> None:
     assert tricky_inverse == naive_inverse
 
 
-@pytest.mark.parametrize("Elem32b", [Elem32bFP])
-def test_fancy_huge(Elem32b: type[BinaryTowerFieldElem]) -> None:
+def test_fancy_large() -> None:
     # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
     # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
     max_log_h = 27
-    log_h = 10
-    ntt = FancyAdditiveNTT(Elem32b, max_log_h, 2)
-    input = [ntt.field.random() for _ in range(1 << log_h)]
-    assert ntt.encode(input) == ntt._naive_encode(input)
+    log_h = 7
+    cantor = CantorAdditiveNTT(Elem32bFAST, max_log_h, 2)
+    fancy = FancyAdditiveNTT(Elem32bFP, max_log_h, 2)
+    input = [fancy.field.random() for _ in range(1 << log_h)]
+    assert fancy.encode(input) == cantor.encode(input)

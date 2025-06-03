@@ -1,6 +1,5 @@
 from typing import Generic, TypeVar
 
-import galois
 import numpy as np
 
 from ..finite_fields.tower import BinaryTowerFieldElem
@@ -222,27 +221,39 @@ class CantorAdditiveNTT(AdditiveNTT[F]):
 class FancyAdditiveNTT(AdditiveNTT[F]):
     # for our S⁽⁰⁾, we're going to take the image in the Fan–Paar field OF the set < 1, 2, 4, ... > in the FAST field.
     # and we can prune a few steps away from _precompute_constants.
+    def _field_to_column(self, field_element, iota):
+        return np.array([(field_element.value >> i) & 1 for i in range(1 << iota)]).reshape(-1, 1)
+
+    def _column_to_field(self, column, iota):
+        return self.field(sum(column.tolist()[i][0] << i for i in range(1 << iota)))
+
+    def _solve_underdetermined_system(self, products, affine_constant, iota):
+        # the matrices we call this on are guaranteed to be 0 in the leftmost column, and elsewhere of full rank.
+        # augmented = galois.FieldArray.row_reduce(np.hstack((products, affine_constant)))
+        # return np.insert(augmented[:, -1][:-1], 0, 0).reshape(-1, 1)
+        # using just the above two lines ^^^, we could one-shot this thing.
+        # i am purposefully going to avoid using the RREF solver, so that this can be ported to Rust more natively.
+        augmented = np.hstack((products, affine_constant))
+        # RREF solver, ASSUMING that `products` is 2^ι × 2^ι, 0 in the leftmost column and elsewhere of full rank.
+        # every positive column i > 0 will have a pivot in the i – 1th row, and the bottom row will be empty.
+        for pivot in range(1, 1 << iota):
+            # the pivot is going to wind up being in the `pivot - 1`th row
+            new_pivot_row = list(augmented[:, pivot][pivot - 1 :]).index(1) + pivot - 1
+            augmented[[pivot - 1, new_pivot_row]] = augmented[[new_pivot_row, pivot - 1]]
+
+            for row in range(1 << iota):
+                if row is not pivot - 1 and augmented[row, pivot] == 1:
+                    augmented[row] ^= augmented[pivot - 1]
+        return np.insert(augmented[:, -1][:-1], 0, 0).reshape(-1, 1)
+
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
-        field = galois.GF(2)
-
-        def _field_to_column(field_element, iota):
-            return field([(field_element.value >> i) & 1 for i in range(1 << iota)]).reshape(-1, 1)
-
-        def _column_to_field(column):
-            return self.field(sum(column.tolist()[i][0] << i for i in range(1 << iota)))
-
-        def _solve_underdetermined_system(products, affine_constant):
-            # the matrices we call this on are guaranteed to be 0 in the leftmost column, and elsewhere of full rank.
-            augmented = galois.FieldArray.row_reduce(np.hstack((products, affine_constant)))
-            return np.insert(augmented[:, -1][:-1], 0, 0).reshape(-1, 1)
-
         initial_dimension = self.max_log_h + skip_rounds + self.log_rate
         self.constants: list[list[F]] = [[]]
         self.constants[0].append(self.field(1))
         iota = 0
         # for each ι, this will be a 2^ι × 2^ι bit-matrix.
         # its columns will be the bit-decompositions in the FP basis of α² + α, for α varying through an 𝔽₂-basis of 𝒯_ι
-        products = field.Zeros((1, 1))
+        products = np.zeros((1, 1), dtype=np.uint8)
         while True:
             iota += 1
             # begin construction of tower level ι.
@@ -251,14 +262,14 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
                 new_fp_vector = self.field(1 << (1 << iota - 1 | j))
                 image = new_fp_vector.square() + new_fp_vector
                 # Get the integer value from the field element and convert to binary column
-                products = np.hstack((products, _field_to_column(image, iota)))
+                products = np.hstack((products, self._field_to_column(image, iota)))
 
             # the below is the decomposition, with respect to our basis, of the image, in our field,
             # of the FAST constant monomial X_0 ⋅ ⋯ X_{ι − 2}. put that in your pipe and smoke it!
-            affine_constant = _field_to_column(self.constants[0][(1 << iota - 1) - 1], iota)
+            affine_constant = self._field_to_column(self.constants[0][(1 << iota - 1) - 1], iota)  # = self.constants[0][-1]
 
-            solution = _solve_underdetermined_system(products, affine_constant)
-            fast_indeterminate = _column_to_field(solution)  # this is the image of FAST X_{ι – 1} in the FP tower
+            solution = self._solve_underdetermined_system(products, affine_constant, iota)
+            fast_indeterminate = self._column_to_field(solution, iota)  # this is the image of FAST X_{ι – 1} in the FP tower
             for j in range(min(1 << iota - 1, initial_dimension - (1 << iota - 1))):
                 self.constants[0].append(self.constants[0][j] * fast_indeterminate)
 
