@@ -117,8 +117,6 @@ class Vision(ABC, Generic[E]):
 
     def sponge_hash(self, message: list[E]) -> list[E]:
         """This assumes the fixed length is the length of the message"""
-        msg_len_bytes = len(message) * self.elem.field.bytes_len
-        
         # pad input using Keccak padding scheme
         padding_len = self.r - (len(message) % self.r)
         padding_bytes = [0] * padding_len * self.elem.field.bytes_len

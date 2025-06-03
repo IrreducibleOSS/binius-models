@@ -63,7 +63,7 @@ def test_mds_correctness():
 @pytest.mark.parametrize("field_elem_t", [Elem8bFP, Elem32bFP], ids=["8b", "32b"])
 def test_generated_vision_instance_mds(field_elem_t: Type):
     log_h = 3
-    n_coeffs = 3 * (1 << log_h)
+    n_coeffs = 3 << log_h
     mds = VisionMDSTransformation(field_elem_t, log_h)
 
     input_evals = [mds.field.random() for _ in range(n_coeffs)]

@@ -34,11 +34,10 @@ class InterpolateNonTwoPrimary(Generic[F]):
         # this will be the thing we want to apply the inverse of stride-wise, after doing ℓ iNTT rounds.
         vandermonde = [[self.field.zero() for _ in range(self.d)] for _ in range(self.d)]
 
-        constants = self.additive_ntt.constants
         for j in range(self.log_d):
             for i in range(j, self.log_d):
                 # first handle the case of power-of-two-valued i and j; these things are our precomputed constants!
-                vandermonde[1 << i][1 << j] = self.field.one() if i == j else constants[j + self.ell][i - j - 1]
+                vandermonde[1 << i][1 << j] = self.additive_ntt.constants[j + self.ell][i - j]
                 # now, i.e. below, we extend by addition / linearity to the case of non-power-of-two-valued i.
                 for k in range(1, min(1 << i, self.d - (1 << i))):  # if 1 << j | k >= self.d: break
                     vandermonde[1 << i | k][1 << j] = vandermonde[k][1 << j] + vandermonde[1 << i][1 << j]
