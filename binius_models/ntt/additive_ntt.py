@@ -1,5 +1,5 @@
 from typing import Generic, TypeVar
-
+from math import ceil, log2
 import numpy as np
 
 from ..finite_fields.tower import BinaryTowerFieldElem
@@ -253,7 +253,7 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         # for each ι, this will be a 2^ι × 2^ι bit-matrix.
         # its columns will be the bit-decompositions in the FP basis of α² + α, for α varying through an 𝔽₂-basis of 𝒯_ι
         products = np.zeros((1, 1), dtype=np.uint8)
-        while True:
+        for _ in range(ceil(log2(initial_dimension))):
             iota += 1
             # begin construction of tower level ι.
             products = np.pad(products, ((0, 1 << iota - 1), (0, 0)), mode="constant", constant_values=0)
@@ -279,7 +279,4 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
             self.constants.append([])
             for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.constants[i - 1][0]))
-        for i in range(self.max_log_h + skip_rounds):
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - i - 1, -1, -1):
-                self.constants[i][j] /= self.constants[i][0]
         self.constants = self.constants[skip_rounds:]
