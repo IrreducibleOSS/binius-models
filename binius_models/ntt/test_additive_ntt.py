@@ -141,12 +141,16 @@ def test_fancy_large() -> None:
     input = [Elem16bFAST.random() for _ in range(1 << log_h)]
 
     def convert_element(element: Elem16bFAST) -> Elem16bFP:  # this is only for testing; it's an abuse of "constants"
-        return sum((fancy.constants[0][i] if (element.value >> i) & 1 else Elem16bFP.zero() for i in range(1 << 4)), Elem16bFP.zero())
+        return sum(
+            (fancy.constants[0][i] if (element.value >> i) & 1 else Elem16bFP.zero() for i in range(1 << 4)),
+            Elem16bFP.zero(),
+        )
 
     def convert_list(input: list[Elem16bFAST]) -> list[Elem16bFP]:
         return [convert_element(element) for element in input]
 
     assert fancy.encode(convert_list(input)) == convert_list(cantor.encode(input))
+
 
 def test_gao_mateer_large() -> None:
     # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
@@ -158,7 +162,10 @@ def test_gao_mateer_large() -> None:
     input = [Elem16bFAST.random() for _ in range(1 << log_h)]
 
     def convert_element(element: Elem16bFAST) -> Elem16bFP:  # this is only for testing; it's an abuse of "constants"
-        return sum((mateer.constants[0][i] if (element.value >> i) & 1 else Elem16bFP.zero() for i in range(1 << 4)), Elem16bFP.zero())
+        return sum(
+            (mateer.constants[0][i] if (element.value >> i) & 1 else Elem16bFP.zero() for i in range(1 << 4)),
+            Elem16bFP.zero(),
+        )
 
     def convert_list(input: list[Elem16bFAST]) -> list[Elem16bFP]:
         return [convert_element(element) for element in input]
