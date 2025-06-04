@@ -278,5 +278,21 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
             for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
-                self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.constants[i - 1][0]))
+                self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.field.one()))  # self.constants[i - 1][0]
+        self.constants = self.constants[skip_rounds:]
+
+class GaoMateerBasis(AdditiveNTT[F]):
+    # for our S⁽⁰⁾, we're going to take the image in the Fan–Paar field OF the set < 1, 2, 4, ... > in the FAST field.
+    # and we can prune a few steps away from _precompute_constants.
+    def _precompute_constants(self, skip_rounds: int = 0) -> None:
+        initial_dimension = self.max_log_h + skip_rounds + self.log_rate
+        self.constants: list[list[F]] = [[]]
+        indeterminates_needed = ceil(log2(initial_dimension))
+        self.constants[0] = [self.field.zero()] * (1 << indeterminates_needed)
+        self.constants[0][(1 << indeterminates_needed) - 1] = self.field(1 << (1 << indeterminates_needed - 1))
+        for i in range((1 << indeterminates_needed) - 1, 0, -1):
+            self.constants[0][i - 1] = self.constants[0][i].square() + self.constants[0][i]
+        self.constants[0] = self.constants[0][:initial_dimension]  # grab only what we need
+        for i in range(1, self.max_log_h + skip_rounds):
+            self.constants.append(self.constants[0][:initial_dimension - i])  # trivial, no computation needed
         self.constants = self.constants[skip_rounds:]
