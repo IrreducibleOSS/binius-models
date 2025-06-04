@@ -157,5 +157,6 @@ def test_gao_mateer_large() -> None:
     # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
     max_log_h = 27
     log_h = 7
-    cantor = CantorAdditiveNTT(Elem32bFAST, max_log_h, 2)
     mateer = GaoMateerBasis(Elem32bFP, max_log_h, 2)
+    input = [Elem16bFAST.random() for _ in range(1 << log_h)]
+    mateer.encode(input)
