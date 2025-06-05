@@ -288,8 +288,6 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
 
 
 class GaoMateerBasis(AdditiveNTT[F]):
-    # for our S⁽⁰⁾, we're going to take the image in the Fan–Paar field OF the set < 1, 2, 4, ... > in the FAST field.
-    # and we can prune a few steps away from _precompute_constants.
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
         initial_dimension = self.max_log_h + skip_rounds + self.log_rate
         self.constants: list[list[F]] = [[]]
