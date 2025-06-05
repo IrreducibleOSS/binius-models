@@ -281,9 +281,7 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
             for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
-                self.constants[i].append(
-                    self._s(self.constants[i - 1][j + 1], self.field.one())
-                )  # self.constants[i - 1][0]
+                self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.field.one()))
         self.constants = self.constants[skip_rounds:]
 
 
