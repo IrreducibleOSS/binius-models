@@ -57,13 +57,12 @@ class AdditiveNTT(Generic[F]):
         normalization_constants = [self.field.one()]
         for i in range(1, log_h):
             s_polys.append([self.field.zero()] * (i + 1))
-            for j in range(i, -1, -1):
-                if j > 0:
-                    s_polys[i][j] = s_polys[i - 1][j - 1].square()
-                if j < i:
-                    s_polys[i][j] += normalization_constants[i - 1] * s_polys[i - 1][j]
+            for j in range(i, 0, -1):
+                s_polys[i][j] = s_polys[i - 1][j - 1].square()
+            for j in range(i - 1, -1, -1):
+                s_polys[i][j] += normalization_constants[i - 1] * s_polys[i - 1][j]
             constant = self.field.zero()  # will equal W_i(1 << i). do this naïvely, to test...
-            accum = self.field(1 << i)
+            accum = self.constants[0][i]
             for j in range(i + 1):
                 constant += s_polys[i][j] * accum
                 accum = accum.square()
@@ -94,9 +93,12 @@ class AdditiveNTT(Generic[F]):
         result = [self.field.zero()] * (len(input) << self.log_rate)
         for i in range(1 << log_h + self.log_rate):  # for each evaluation point x in the target domain...
             power_of_x = self.field.one()  # viewed as a tower element...
+            value = sum(
+                (self.constants[0][j] for j in range(log_h + self.log_rate) if is_bit_set(i, j)), self.field.zero()
+            )
             for j in range(1 << log_h):  # for each power j...
                 result[i] += input_monomial[j] * power_of_x
-                power_of_x *= self.field(i)
+                power_of_x *= value
         return result
 
     def _calculate_twiddle(self, i: int, j: int, coset: int, log_h: int) -> F:
