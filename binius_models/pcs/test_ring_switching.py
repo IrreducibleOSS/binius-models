@@ -14,11 +14,11 @@ from .tensor_alg import TensorAlgElem
 # test that the ring-switched FRI-Binius works correctly.
 # in particular, we instantiate a FRI-Binius instance from the RingSwitching protocol
 # and then run the FRI-Binius protocol itself.
-@pytest.mark.parametrize("var, log_rate", [(5, 1), (5, 2), (8, 1)])
-def test_ring_switched_pcs(var: int, log_rate: int) -> None:
+@pytest.mark.parametrize("var, log_inv_rate", [(5, 1), (5, 2), (8, 1)])
+def test_ring_switched_pcs(var: int, log_inv_rate: int) -> None:
     multilinear = [SmallFieldElem.random() for _ in range(1 << var)]
 
-    ring_switch = RingSwitching(var, log_rate)
+    ring_switch = RingSwitching(var, log_inv_rate)
     ring_switch.commit(multilinear)
 
     # a random element of L^{var}, at which we want to evaluate the polynomial.
