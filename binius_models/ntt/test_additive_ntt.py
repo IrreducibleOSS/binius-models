@@ -134,7 +134,7 @@ def test_inverse_interleaved() -> None:
 def test_fancy_large() -> None:
     # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
     # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
-    max_log_h = 13
+    max_log_h = 20
     log_h = 7
     cantor = CantorAdditiveNTT(Elem32bFAST, max_log_h, 2)
     fancy = FancyAdditiveNTT(Elem32bFP, max_log_h, 2)
