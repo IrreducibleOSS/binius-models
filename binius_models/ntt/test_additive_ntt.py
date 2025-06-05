@@ -6,6 +6,7 @@ from .additive_ntt import (
     CantorAdditiveNTT,
     FancyAdditiveNTT,
     FourStepAdditiveNTT,
+    GaoMateerBasis,
 )
 
 
@@ -133,17 +134,28 @@ def test_inverse_interleaved() -> None:
 def test_fancy_large() -> None:
     # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
     # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
-    max_log_h = 27
+    max_log_h = 20
     log_h = 7
     cantor = CantorAdditiveNTT(Elem32bFAST, max_log_h, 2)
     fancy = FancyAdditiveNTT(Elem32bFP, max_log_h, 2)
     input = [Elem16bFAST.random() for _ in range(1 << log_h)]
 
     def convert_element(element: Elem16bFAST) -> Elem16bFP:  # this is only for testing; it's an abuse of "constants"
-        column = fancy._field_to_column(element, 4)
-        return sum((fancy.constants[0][i] if column[i] else Elem16bFP.zero() for i in range(1 << 4)), Elem16bFP.zero())
+        return sum(
+            (fancy.constants[0][i] if (element.value >> i) & 1 else Elem16bFP.zero() for i in range(1 << 4)),
+            Elem16bFP.zero(),
+        )
 
     def convert_list(input: list[Elem16bFAST]) -> list[Elem16bFP]:
         return [convert_element(element) for element in input]
 
     assert fancy.encode(convert_list(input)) == convert_list(cantor.encode(input))
+
+
+def test_gao_mateer() -> None:
+    max_log_h = 7
+    log_h = 5
+    mateer = GaoMateerBasis(Elem32bFP, max_log_h, 2)  # to get "full" basis, run w/ max_log_h + rate == 32
+    input = [Elem16bFP.random() for _ in range(1 << log_h)]
+    mateer.encode(input)
+    assert mateer.encode(input) == mateer._naive_encode(input)
