@@ -152,7 +152,7 @@ def test_fancy_large() -> None:
     assert fancy.encode(convert_list(input)) == convert_list(cantor.encode(input))
 
 
-def test_gao_mateer_large() -> None:
+def test_gao_mateer() -> None:
     # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
     # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
     max_log_h = 7
