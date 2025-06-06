@@ -296,7 +296,6 @@ class GaoMateerBasis(AdditiveNTT[F]):
         self.constants[0][(1 << indeterminates_needed) - 1] = self.field(1 << (1 << indeterminates_needed - 1))
         for i in range((1 << indeterminates_needed) - 1, 0, -1):
             self.constants[0][i - 1] = self.constants[0][i].square() + self.constants[0][i]
-        self.constants[0] = self.constants[0][:initial_dimension]  # grab only what we need
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append(self.constants[0][: initial_dimension - i])  # trivial, no computation needed
         self.constants = self.constants[skip_rounds:]
