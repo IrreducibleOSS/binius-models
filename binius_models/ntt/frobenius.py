@@ -149,24 +149,24 @@ class FrobeniusNTT:
         unpacked = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
 
         unpacked[0] = output[0]  # kill the 0 case right away, which is degenerate
-        for i in range(1, self.log_h + self.log_inv_rate + 1):
-            iota = ceil(log2(i))
-            beta_bits = i - 1 - iota
+        for i in range(self.log_h + self.log_inv_rate):
+            iota = ceil(log2(i + 1))
+            beta_bits = i - iota
             for j in range(1 << beta_bits):
                 j_copy = j
                 index = 1
-                for k in range(1, i):
+                for k in range(1, i + 1):
                     index <<= 1
                     if is_power_of_two(k):
                         continue
                     else:
                         index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
                         j_copy >>= 1
-                value = levels[iota](sum(output[1 << i - 1 | j << iota | k].value << k for k in range(1 << iota)))
+                value = levels[iota](sum(output[1 << i | j << iota | k].value << k for k in range(1 << iota)))
                 for _ in range(1 << iota):  # galois loop
                     unpacked[index] = value
 
-                    field_index = self._lexicographic_to_field(index, i, iota)
+                    field_index = self._lexicographic_to_field(index, i + 1, iota)
                     field_index = field_index.square()  # overwrite
                     index = self._field_to_lexicographic(field_index, iota)
         return unpacked
