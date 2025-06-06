@@ -163,11 +163,10 @@ class FrobeniusNTT:
                         index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
                         j_copy >>= 1
                 value = levels[iota](sum(output[1 << i - 1 | j << iota | k].value << k for k in range(1 << iota)))
-                unpacked[index] = value
-                field_index = self._lexicographic_to_field(index, i, iota)
-                for _ in range(1, 1 << iota):
+                for _ in range(1 << iota):  # galois loop
+                    unpacked[index] = value
+
+                    field_index = self._lexicographic_to_field(index, i, iota)
                     field_index = field_index.square()  # overwrite
-                    index = self._field_to_lexicographic(field_index, iota)  # overwrite
-                    unpacked[index] = value.square()
-                    value = unpacked[index]
+                    index = self._field_to_lexicographic(field_index, iota)
         return unpacked
