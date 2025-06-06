@@ -86,7 +86,11 @@ class FrobeniusNTT:
 
         if l == 0:
             # coefficient level is the field we're in.
-            # alpha_length is actually the Sigma we're in (!?).
+            # alpha_length = m is actually the Sigma we're in (!?).
+            # beta_idx is the index of the result within Σₘ.
+            offset = 0 if alpha_level == 0 else 1 << alpha_length - 1
+            for i in range(1 << coefficient_level):
+                output[offset | beta_idx << coefficient_level | i] = input[0].value >> i
             return
 
         special = alpha_length != 0 and is_power_of_two(alpha_length)
@@ -106,7 +110,7 @@ class FrobeniusNTT:
             alpha_idx << 1,
             0 if alpha_idx == 0 else alpha_length + 1,
             alpha_level if alpha_idx == 0 or 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
-            beta_idx if special else beta_idx << 1,
+            beta_idx if special or alpha_length == 0 else beta_idx << 1,
         )
 
         if special:
@@ -121,7 +125,7 @@ class FrobeniusNTT:
             alpha_idx << 1 | 1,
             alpha_length + 1,
             alpha_level if 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
-            beta_idx << 1 | 1,
+            beta_idx if alpha_length == 0 else beta_idx << 1 | 1,
         )
 
     def encode(self, input: list[Elem1bFP]) -> list[Elem1bFP]:
