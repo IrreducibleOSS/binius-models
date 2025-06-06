@@ -55,6 +55,7 @@ class FrobeniusNTT:
 
         mateer = GaoMateerBasis(Elem128bFP, log_h, 2)
         self.basis = mateer.constants[0]
+        self.basis[0].downcast(levels[0])
         for i in range(indeterminates_needed):  # revisit whether to keep this around
             for j in range(1 << i):
                 self.basis[1 << i | j] = self.basis[1 << i | j].downcast(levels[i + 1])
@@ -88,9 +89,9 @@ class FrobeniusNTT:
             # coefficient level is the field we're in.
             # alpha_length = m is actually the Sigma we're in (!?).
             # beta_idx is the index of the result within Σₘ.
-            offset = 0 if alpha_level == 0 else 1 << alpha_length - 1
+            offset = 0 if alpha_level == 0 else 1 << alpha_length - 1  # offset == ⌊ log₂ alpha_index ⌋
             for i in range(1 << coefficient_level):
-                output[offset | beta_idx << coefficient_level | i] = Elem1bFP(input[0].value >> i)
+                output[offset | beta_idx << coefficient_level | i] = Elem1bFP(input[0].value >> i & 0x01)
             return
 
         special = is_power_of_two(alpha_length)
@@ -110,7 +111,7 @@ class FrobeniusNTT:
             alpha_idx << 1,
             0 if alpha_idx == 0 else alpha_length + 1,
             alpha_level if alpha_idx == 0 or 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
-            beta_idx if special or alpha_length == 0 else beta_idx << 1,
+            beta_idx if alpha_idx == 0 or special else beta_idx << 1,
         )
 
         if special:
@@ -125,7 +126,7 @@ class FrobeniusNTT:
             alpha_idx << 1 | 1,
             alpha_length + 1,
             alpha_level if 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
-            beta_idx if alpha_length == 0 else beta_idx << 1 | 1,
+            beta_idx if alpha_idx == 0 else beta_idx << 1 | 1,
         )
 
     def encode(self, input: list[Elem1bFP]) -> list[Elem1bFP]:
@@ -135,7 +136,32 @@ class FrobeniusNTT:
         self._encode_helper(input, output, self.log_h + self.log_inv_rate, 0, 0, 0, 0, 0)
         return output
 
-    def emulate_output(self, output: list[Elem1bFP], index: int) -> Elem128bFP:
+    def unpack_output(self, output: list[Elem1bFP]) -> Elem128bFP:
         # `output` is the condensed, raw bit-output of the Frobenius NTT.
         # `index`: an log_h + log_inv_rate-bit integer, index of the desired output element we want to conjure.
-        return Elem128bFP.zero()
+        unpacked = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
+        unpacked[0] = output[0]  # kill the 0 case right away, which is degenerate
+        for i in range(1, self.log_h + self.log_inv_rate):
+            iota = ceil(log2(i))  # tower level we're dealing with
+            beta_bits = i - 1 - iota
+            for j in range(1 << beta_bits):
+                j_copy = j
+                index = 1
+                for k in range(1, i):
+                    index <<= 1
+                    if is_power_of_two(k):
+                        continue
+                    else:
+                        index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
+                        j_copy >>= 1
+
+                field_index = sum(
+                    (self.basis[k] for k in range(1 << iota) if is_bit_set(index, k)), levels[iota].zero()
+                )
+                unpacked[field_index.value] = levels[iota](
+                    sum(output[1 << i - 1 | j << iota | k].value << k for k in range(1 << iota))
+                )
+                for _ in range(1, 1 << iota):
+                    unpacked[field_index.square().value] = unpacked[field_index.value].square()
+                    field_index = field_index.square()
+        return unpacked
