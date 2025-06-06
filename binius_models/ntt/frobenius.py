@@ -146,27 +146,36 @@ class FrobeniusNTT:
     def unpack_output(self, output: list[Elem1bFP]) -> Elem128bFP:  # <---- bigger than necessary
         # `output` is the condensed, raw bit-output of the Frobenius NTT.
         # `index`: an log_h + log_inv_rate-bit integer, index of the desired output element we want to conjure.
+        initial_dimension = self.log_h + self.log_inv_rate
+        indeterminates_needed = ceil(log2(initial_dimension))
+
         unpacked = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
-
         unpacked[0] = output[0]  # kill the 0 case right away, which is degenerate
-        for i in range(self.log_h + self.log_inv_rate):
-            iota = ceil(log2(i + 1))
-            beta_bits = i - iota
-            for j in range(1 << beta_bits):
-                j_copy = j
-                index = 1
-                for k in range(1, i + 1):
-                    index <<= 1
-                    if is_power_of_two(k):
-                        continue
-                    else:
-                        index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
-                        j_copy >>= 1
-                value = levels[iota](sum(output[1 << i | j << iota | k].value << k for k in range(1 << iota)))
-                for _ in range(1 << iota):  # galois loop
-                    unpacked[index] = value
+        unpacked[1] = output[1]
 
-                    field_index = self._lexicographic_to_field(index, i + 1, iota)
-                    field_index = field_index.square()  # overwrite
-                    index = self._field_to_lexicographic(field_index, iota)
+        for iota in range(indeterminates_needed):
+            for i in range(1 << iota):
+                subspace = 1 << iota | i
+                if subspace >= initial_dimension:
+                    break
+                beta_bits = subspace - 1 - iota
+                for j in range(1 << beta_bits):
+                    j_copy = j
+                    index = 1
+                    for k in range(1, subspace + 1):
+                        index <<= 1
+                        if is_power_of_two(k):
+                            continue
+                        else:
+                            index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
+                            j_copy >>= 1
+                    value = levels[iota + 1](
+                        sum(output[1 << subspace | j << iota + 1 | k].value << k for k in range(1 << iota + 1))
+                    )
+                    for _ in range(1 << iota + 1):  # galois loop
+                        unpacked[index] = value
+
+                        field_index = self._lexicographic_to_field(index, subspace + 1, iota + 1)
+                        field_index = field_index.square()  # overwrite
+                        index = self._field_to_lexicographic(field_index, iota + 1)
         return unpacked
