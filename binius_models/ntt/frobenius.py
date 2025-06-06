@@ -152,10 +152,16 @@ class FrobeniusNTT:
         unpacked = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
         unpacked[0] = output[0]  # kill the 0 case right away, which is degenerate
         unpacked[1] = output[1]
+        # for reasons that wind up being very hard to explain, it works out best with the indexing to do this---
+        # i.e., to handle not just 0 but also 1 as a special case. for a baby version of this phenomenon,
+        # see the constructor above (i.e., the downcasting). note that β₀ needs to get excluded there.
+        # but β₀ generates both 0 and 1. the actual reasoning is tricker to explain, but leave it at that for now.
 
         for iota in range(indeterminates_needed):
             for i in range(1 << iota):
                 subspace = 1 << iota | i
+                # `subspace`: we are now going to unpack all values whose final (i.e., unpacked!) indices take the form
+                # 1XX.....XX, with `subspace` many bits. in other words, β_{subspace} + lower-order terms.
                 if subspace >= initial_dimension:
                     break
                 beta_bits = subspace - 1 - iota
