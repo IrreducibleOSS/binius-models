@@ -134,3 +134,8 @@ class FrobeniusNTT:
         output = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
         self._encode_helper(input, output, self.log_h + self.log_inv_rate, 0, 0, 0, 0, 0)
         return output
+
+    def emulate_output(self, output: list[Elem1bFP], index: int) -> Elem128bFP:
+        # `output` is the condensed, raw bit-output of the Frobenius NTT.
+        # `index`: an log_h + log_inv_rate-bit integer, index of the desired output element we want to conjure.
+        return Elem128bFP.zero()
