@@ -53,12 +53,21 @@ class FrobeniusNTT:
         initial_dimension = self.log_h + self.log_inv_rate
         indeterminates_needed = ceil(log2(initial_dimension))
 
-        mateer = GaoMateerBasis(Elem128bFP, log_h, 2)
+        mateer = GaoMateerBasis(levels[indeterminates_needed], log_h, 2)
         self.basis = mateer.constants[0]
         self.basis[0].downcast(levels[0])
-        for i in range(indeterminates_needed):  # revisit whether to keep this around
-            for j in range(1 << i):
-                self.basis[1 << i | j] = self.basis[1 << i | j].downcast(levels[i + 1])
+        for iota in range(indeterminates_needed):  # revisit whether to keep this around
+            for i in range(1 << iota):
+                self.basis[1 << iota | i] = self.basis[1 << iota | i].downcast(levels[iota + 1])
+
+    def _lexicographic_to_field(self, index: int, length: int, iota: int) -> BinaryTowerFieldElem:
+        # could do `range(i)` where "i" is as below.
+        # we are summing over more than we need; index will only be i ≤ 1 << iota bits.
+        return sum((self.basis[k] for k in range(length) if is_bit_set(index, k)), levels[iota].zero())
+
+    def _field_to_lexicographic(self, field_index: int, iota: int) -> int:
+        # TODO: this is wrong; we are off by reversing the isomorphism back into lexicographic coords.
+        return field_index.value
 
     def _encode_helper(
         self,
@@ -95,9 +104,7 @@ class FrobeniusNTT:
             return
 
         special = is_power_of_two(alpha_length)
-        twiddle = sum(
-            (self.basis[i + 1] for i in range(alpha_length) if is_bit_set(alpha_idx, i)), levels[alpha_level].zero()
-        )
+        twiddle = self._lexicographic_to_field(alpha_idx + 1, alpha_length << 1, alpha_level)
 
         # todo below: smartly handle the case where l > self.log_h, and the lower half of the input is zero.
         input_stash = [input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
@@ -136,13 +143,14 @@ class FrobeniusNTT:
         self._encode_helper(input, output, self.log_h + self.log_inv_rate, 0, 0, 0, 0, 0)
         return output
 
-    def unpack_output(self, output: list[Elem1bFP]) -> Elem128bFP:
+    def unpack_output(self, output: list[Elem1bFP]) -> Elem128bFP:  # <---- bigger than necessary
         # `output` is the condensed, raw bit-output of the Frobenius NTT.
         # `index`: an log_h + log_inv_rate-bit integer, index of the desired output element we want to conjure.
         unpacked = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
+
         unpacked[0] = output[0]  # kill the 0 case right away, which is degenerate
-        for i in range(1, self.log_h + self.log_inv_rate):
-            iota = ceil(log2(i))  # tower level we're dealing with
+        for i in range(1, self.log_h + self.log_inv_rate + 1):
+            iota = ceil(log2(i))
             beta_bits = i - 1 - iota
             for j in range(1 << beta_bits):
                 j_copy = j
@@ -154,14 +162,12 @@ class FrobeniusNTT:
                     else:
                         index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
                         j_copy >>= 1
-
-                field_index = sum(
-                    (self.basis[k] for k in range(1 << iota) if is_bit_set(index, k)), levels[iota].zero()
-                )
-                unpacked[field_index.value] = levels[iota](
-                    sum(output[1 << i - 1 | j << iota | k].value << k for k in range(1 << iota))
-                )
+                value = levels[iota](sum(output[1 << i - 1 | j << iota | k].value << k for k in range(1 << iota)))
+                unpacked[index] = value
+                field_index = self._lexicographic_to_field(index, i, iota)
                 for _ in range(1, 1 << iota):
-                    unpacked[field_index.square().value] = unpacked[field_index.value].square()
-                    field_index = field_index.square()
+                    field_index = field_index.square()  # overwrite
+                    index = self._field_to_lexicographic(field_index, iota)  # overwrite
+                    unpacked[index] = value.square()
+                    value = unpacked[index]
         return unpacked
