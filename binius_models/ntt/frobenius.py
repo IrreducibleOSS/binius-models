@@ -90,10 +90,10 @@ class FrobeniusNTT:
             # beta_idx is the index of the result within Σₘ.
             offset = 0 if alpha_level == 0 else 1 << alpha_length - 1
             for i in range(1 << coefficient_level):
-                output[offset | beta_idx << coefficient_level | i] = input[0].value >> i
+                output[offset | beta_idx << coefficient_level | i] = Elem1bFP(input[0].value >> i)
             return
 
-        special = alpha_length != 0 and is_power_of_two(alpha_length)
+        special = is_power_of_two(alpha_length)
         twiddle = sum(
             (self.basis[i + 1] for i in range(alpha_length) if is_bit_set(alpha_idx, i)), levels[alpha_level].zero()
         )
