@@ -97,7 +97,7 @@ class FrobeniusNTT:
             # coefficient level is the field we're in.
             # alpha_length = m is actually the Sigma we're in (!?).
             # beta_idx is the index of the result within Σₘ.
-            offset = 0 if alpha_level == 0 else 1 << alpha_length - 1  # offset == ⌊ log₂ alpha_index ⌋
+            offset = 0 if alpha_length == 0 else 1 << alpha_length - 1  # offset == ⌊ log₂ alpha_index ⌋
             for i in range(1 << coefficient_level):
                 output[offset | beta_idx << coefficient_level | i] = Elem1bFP(input[0].value >> i & 0x01)
             return
@@ -115,9 +115,9 @@ class FrobeniusNTT:
             l - 1,
             alpha_level,
             alpha_idx << 1,
-            0 if alpha_idx == 0 else alpha_length + 1,
-            alpha_level if alpha_idx == 0 or 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
-            beta_idx if alpha_idx == 0 or special else beta_idx << 1,
+            0 if alpha_length == 0 else alpha_length + 1,
+            alpha_level if alpha_length == 0 or 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
+            beta_idx if alpha_length == 0 or special else beta_idx << 1,
         )
 
         if special:
@@ -132,7 +132,7 @@ class FrobeniusNTT:
             alpha_idx << 1 | 1,
             alpha_length + 1,
             alpha_level if 1 << alpha_level >= alpha_length + 2 else alpha_level + 1,
-            beta_idx if alpha_idx == 0 else beta_idx << 1 | 1,
+            beta_idx if alpha_length == 0 else beta_idx << 1 | 1,
         )
 
     def encode(self, input: list[Elem1bFP]) -> list[Elem1bFP]:
