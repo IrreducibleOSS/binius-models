@@ -13,8 +13,8 @@ class Elem32bFP(BinaryTowerFieldElem):
 
 def test_frobenius() -> None:
     log_h = 5
-    frob = FrobeniusNTT(log_h, 0)  # 2
-    mateer = GaoMateerBasis(Elem32bFP, log_h, 0)
+    frob = FrobeniusNTT(log_h, 2)
+    mateer = GaoMateerBasis(Elem32bFP, log_h, 2)
     input = [Elem1bFP.random() for _ in range(1 << log_h)]
     upcasted = [element.upcast(Elem32bFP) for element in input]
     assert frob.unpack_output(frob.encode(input)) == mateer.encode(upcasted)

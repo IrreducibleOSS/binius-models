@@ -166,13 +166,10 @@ class FrobeniusNTT:
                 beta_bits = subspace - 1 - iota
                 for j in range(1 << beta_bits):
                     j_copy = j
-                    index = 1
-                    for k in range(1, subspace + 1):
-                        index <<= 1
-                        if is_power_of_two(k):
-                            continue
-                        else:
-                            index |= j_copy & 1  # <--- TODO: I think this is off by a bit-reversal of j_copy; revisit
+                    index = 1 << subspace
+                    for k in range(subspace):
+                        if not is_power_of_two(subspace - k):
+                            index |= (j_copy & 1) << k
                             j_copy >>= 1
                     value = levels[iota + 1](
                         sum(output[1 << subspace | j << iota + 1 | k].value << k for k in range(1 << iota + 1))
