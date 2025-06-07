@@ -101,7 +101,6 @@ class FrobeniusNTT:
             (self.basis[k + 1] for k in range(alpha_length) if is_bit_set(alpha_idx, k)), levels[alpha_level].zero()
         )
 
-        # todo below: smartly handle the case where l > self.log_h, and the lower half of the input is zero.
         early_round = l > self.log_h
         folded = [input[i] if early_round else input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
         if alpha_level > coefficient_level:
