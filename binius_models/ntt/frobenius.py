@@ -55,7 +55,7 @@ class FrobeniusNTT:
 
         mateer = GaoMateerBasis(levels[indeterminates_needed], log_h, 2)
         self.basis = mateer.constants[0]
-        self.basis[0].downcast(levels[0])
+        self.basis[0] = self.basis[0].downcast(levels[0])
         for iota in range(indeterminates_needed):  # revisit whether to keep this around
             for i in range(1 << iota):
                 self.basis[1 << iota | i] = self.basis[1 << iota | i].downcast(levels[iota + 1])
