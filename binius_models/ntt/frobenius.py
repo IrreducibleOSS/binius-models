@@ -102,11 +102,12 @@ class FrobeniusNTT:
         )
 
         # todo below: smartly handle the case where l > self.log_h, and the lower half of the input is zero.
-        input_stash = [input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
+        early_round = l > self.log_h
+        folded = [input[i] if early_round else input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
         if alpha_level > coefficient_level:
-            input_stash = [element.upcast(levels[alpha_level]) for element in input_stash]
+            folded = [element.upcast(levels[alpha_level]) for element in folded]
         self._encode_helper(
-            input_stash,
+            folded,
             output,
             l - 1,
             alpha_level,
@@ -118,10 +119,10 @@ class FrobeniusNTT:
 
         if special:
             return
-        input_stash = [input_stash[i] + input[1 << l - 1 | i] for i in range(1 << l - 1)]
+        folded = [folded[i] if early_round else folded[i] + input[1 << l - 1 | i] for i in range(1 << l - 1)]
         # these will inherit the first operand's field, which is at least as large as the second; so no need to upcast.
         self._encode_helper(
-            input_stash,
+            folded,
             output,
             l - 1,
             alpha_level,
