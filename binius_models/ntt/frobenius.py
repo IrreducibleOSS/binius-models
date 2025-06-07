@@ -103,8 +103,13 @@ class FrobeniusNTT:
 
         early_round = l > self.log_h
         folded = [input[i] if early_round else input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
-        if alpha_level > coefficient_level:
-            folded = [element.upcast(levels[alpha_level]) for element in folded]
+        # the python model is a bit quirky on this; it will allow us to multiply big * small and also add small + big.
+        # the output of each binop will inherit the field of the first operand. thus it'll be `coefficient_field`.
+        # of course this will be wrong whenever `alpha_level > coefficient_level`. thus we perform the upcast below.
+        # i have delayed this upcast just for illustration---so that you can see that these are small × larges.
+        # in general, we have `alpha_level` ≥ `coefficient_level`; the below will be a no-op except when this is strict.
+        folded = [element.upcast(levels[alpha_level]) for element in folded]
+
         self._encode_helper(
             folded,
             output,
