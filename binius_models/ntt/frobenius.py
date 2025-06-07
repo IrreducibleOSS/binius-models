@@ -60,6 +60,9 @@ class FrobeniusNTT:
             for i in range(1 << iota):
                 self.basis[1 << iota | i] = self.basis[1 << iota | i].downcast(levels[iota + 1])
 
+    def _square_in_coordinates(self, index: int) -> int:
+        return index ^ index >> 1
+
     def _lexicographic_to_field(self, index: int, length: int, iota: int) -> BinaryTowerFieldElem:
         # could do `range(i)` where "i" is as below.
         # we are summing over more than we need; index will only be i ≤ 1 << iota bits.
@@ -161,7 +164,7 @@ class FrobeniusNTT:
             for i in range(1 << iota):
                 subspace = 1 << iota | i
                 # `subspace`: we are now going to unpack all values whose final (i.e., unpacked!) indices take the form
-                # 1XX.....XX, with `subspace` many bits. in other words, β_{subspace} + lower-order terms.
+                # 1XX.....XX, with `subspace` many Xs. in other words, β_{subspace} + lower-order terms.
                 if subspace >= initial_dimension:
                     break
                 beta_bits = subspace - 1 - iota
@@ -180,8 +183,6 @@ class FrobeniusNTT:
                     )
                     for _ in range(1 << iota + 1):  # galois loop
                         unpacked[index] = value
-
-                        field_index = self._lexicographic_to_field(index, subspace + 1, iota + 1)
-                        field_index = field_index.square()  # overwrite
-                        index = self._field_to_lexicographic(field_index, iota + 1)
+                        index = self._square_in_coordinates(index)
+                        value = value.square()
         return unpacked
