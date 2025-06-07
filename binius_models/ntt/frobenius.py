@@ -68,10 +68,6 @@ class FrobeniusNTT:
         # we are summing over more than we need; index will only be i ≤ 1 << iota bits.
         return sum((self.basis[k] for k in range(length) if is_bit_set(index, k)), levels[iota].zero())
 
-    def _field_to_lexicographic(self, field_index: int, iota: int) -> int:
-        # TODO: this is wrong; we are off by reversing the isomorphism back into lexicographic coords.
-        return field_index.value
-
     def _encode_helper(
         self,
         input: list[Elem1bFP],
@@ -107,7 +103,7 @@ class FrobeniusNTT:
             return
 
         special = is_power_of_two(alpha_length)
-        twiddle = self._lexicographic_to_field(alpha_idx + 1, alpha_length << 1, alpha_level)
+        twiddle = self._lexicographic_to_field(alpha_idx << 1, alpha_length + 1, alpha_level)
 
         # todo below: smartly handle the case where l > self.log_h, and the lower half of the input is zero.
         input_stash = [input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
