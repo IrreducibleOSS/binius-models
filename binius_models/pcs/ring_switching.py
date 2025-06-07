@@ -37,9 +37,9 @@ from .tensor_alg import (
 class RingSwitching:
     (large_degree, small_degree, relative_degree, kappa) = degree_parameters()
 
-    def __init__(self, var: int, log_rate: int) -> None:
+    def __init__(self, var: int, log_inv_rate: int) -> None:
         self.var = var
-        self.fri_binius = FRIBinius(LargeFieldElem, var - self.kappa, log_rate)
+        self.fri_binius = FRIBinius(LargeFieldElem, var - self.kappa, log_inv_rate)
         self.challenges: list[LargeFieldElem] = []  # we ONLY need this in `finalize`; see below
 
     def _pack_polynomial(self, multilinear: list[SmallFieldElem]) -> list[LargeFieldElem]:

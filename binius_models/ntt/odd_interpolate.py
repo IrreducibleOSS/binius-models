@@ -21,7 +21,7 @@ class InterpolateNonTwoPrimary(Generic[F]):
         if field.field.degree < log_h:
             raise ValueError("field degree must be at least log(d) + ell")
         self.field = field
-        self.additive_ntt = AdditiveNTT(field=field, max_log_h=log_h, log_rate=0)
+        self.additive_ntt = AdditiveNTT(field=field, max_log_h=log_h, log_inv_rate=0)
         self._precompute_inverse_vandermonde()
 
     def _precompute_inverse_vandermonde(self) -> None:

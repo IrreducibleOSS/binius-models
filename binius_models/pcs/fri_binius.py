@@ -17,11 +17,11 @@ class VectorOracle:
 
 
 class FRIBinius:  # (Generic[F])
-    def __init__(self, field: type[Elem128b], var: int, log_rate: int):
+    def __init__(self, field: type[Elem128b], var: int, log_inv_rate: int):
         self.var = var
-        self.log_rate = log_rate
+        self.log_inv_rate = log_inv_rate
         self.field = field
-        self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_rate)
+        self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_inv_rate)
         self.challenges: list[Elem128b] = []  # memoize the round challenges we receive from the verifier...
         self.oracle = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
@@ -47,7 +47,7 @@ class FRIBinius:  # (Generic[F])
         # note interestingly that in both that case and this, the 0th basis element, namely S⁽ⁱ⁾(βᵢ) = 1, is missing.
         # we don't need it there; nor do we need it here: we're only going to return the 0th fiber element.
         # so don't bother, simply take the positive-indexed basis vectors and use `position` as the combination vector.
-        return self.additive_ntt._calculate_twiddle(i, position, 0, self.var + self.log_rate)
+        return self.additive_ntt._calculate_twiddle(i, position, 0, self.var + self.log_inv_rate)
 
     def commit(self, multilinear: list[Elem128b]) -> None:
         assert len(multilinear) == 1 << self.var  # length is a power of 2
@@ -72,8 +72,8 @@ class FRIBinius:  # (Generic[F])
     def receive_challenge(self, r: Elem128b) -> None:
         self.challenges.append(r)
         i = self.sumcheck.round
-        next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_rate - i - 1)
-        for u in range(1 << self.var + self.log_rate - i - 1):  # hasn't +='d round yet
+        next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_inv_rate - i - 1)
+        for u in range(1 << self.var + self.log_inv_rate - i - 1):  # hasn't +='d round yet
             values = (self.oracle.vectors[i][u << 1], self.oracle.vectors[i][u << 1 | 1])
             next_round_oracle[u] = self._fold(self._get_preimage(i, u), values, r)
         self.sumcheck.receive_challenge(r)
@@ -88,7 +88,7 @@ class FRIBinius:  # (Generic[F])
         # note that of course in practice this whole thing will be done by the verifier,
         # and in particular the randomness will be chosen by the verifier.
         assert self.sumcheck.round == self.var  # sumcheck has already completed
-        v = random.randrange(1 << self.var + self.log_rate)  # note: this should be cryptographically random in practice
+        v = random.randrange(1 << self.var + self.log_inv_rate)
         c = self.field.zero()
         for i in range(self.var):
             values = (self.oracle.vectors[i][~(~v | 0x01)], self.oracle.vectors[i][v | 0x01])  # query at coset of v
