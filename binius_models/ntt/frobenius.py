@@ -63,11 +63,6 @@ class FrobeniusNTT:
     def _square_in_coordinates(self, index: int) -> int:
         return index ^ index >> 1
 
-    def _lexicographic_to_field(self, index: int, length: int, iota: int) -> BinaryTowerFieldElem:
-        # could do `range(i)` where "i" is as below.
-        # we are summing over more than we need; index will only be i ≤ 1 << iota bits.
-        return sum((self.basis[k] for k in range(length) if is_bit_set(index, k)), levels[iota].zero())
-
     def _encode_helper(
         self,
         input: list[Elem1bFP],
@@ -79,7 +74,6 @@ class FrobeniusNTT:
         alpha_level: int,
         beta_idx: int,
     ) -> None:
-        # todo: make this sensitive to the fact that all but first 1 << log_h elements of input are zero
         # it should be possible to infer alpha_length as just self.log_h + self.log_inv_rate - l
         # alpha represents the index of this block within the current butterfly phase.
         # keeping track of what field it's defined over is tricky and important.
@@ -103,7 +97,9 @@ class FrobeniusNTT:
             return
 
         special = is_power_of_two(alpha_length)
-        twiddle = self._lexicographic_to_field(alpha_idx << 1, alpha_length + 1, alpha_level)
+        twiddle = sum(
+            (self.basis[k + 1] for k in range(alpha_length) if is_bit_set(alpha_idx, k)), levels[alpha_level].zero()
+        )
 
         # todo below: smartly handle the case where l > self.log_h, and the lower half of the input is zero.
         input_stash = [input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
