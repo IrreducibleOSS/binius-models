@@ -1,3 +1,4 @@
+from math import ceil, log2
 from typing import Generic, TypeVar
 
 import numpy as np
@@ -56,13 +57,12 @@ class AdditiveNTT(Generic[F]):
         normalization_constants = [self.field.one()]
         for i in range(1, log_h):
             s_polys.append([self.field.zero()] * (i + 1))
-            for j in range(i, -1, -1):
-                if j > 0:
-                    s_polys[i][j] = s_polys[i - 1][j - 1].square()
-                if j < i:
-                    s_polys[i][j] += normalization_constants[i - 1] * s_polys[i - 1][j]
+            for j in range(i, 0, -1):
+                s_polys[i][j] = s_polys[i - 1][j - 1].square()
+            for j in range(i - 1, -1, -1):
+                s_polys[i][j] += normalization_constants[i - 1] * s_polys[i - 1][j]
             constant = self.field.zero()  # will equal W_i(1 << i). do this naïvely, to test...
-            accum = self.field(1 << i)
+            accum = self.constants[0][i]
             for j in range(i + 1):
                 constant += s_polys[i][j] * accum
                 accum = accum.square()
@@ -93,9 +93,12 @@ class AdditiveNTT(Generic[F]):
         result = [self.field.zero()] * (len(input) << self.log_rate)
         for i in range(1 << log_h + self.log_rate):  # for each evaluation point x in the target domain...
             power_of_x = self.field.one()  # viewed as a tower element...
+            value = sum(
+                (self.constants[0][j] for j in range(log_h + self.log_rate) if is_bit_set(i, j)), self.field.zero()
+            )
             for j in range(1 << log_h):  # for each power j...
                 result[i] += input_monomial[j] * power_of_x
-                power_of_x *= self.field(i)
+                power_of_x *= value
         return result
 
     def _calculate_twiddle(self, i: int, j: int, coset: int, log_h: int) -> F:
@@ -253,7 +256,7 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         # for each ι, this will be a 2^ι × 2^ι bit-matrix.
         # its columns will be the bit-decompositions in the FP basis of α² + α, for α varying through an 𝔽₂-basis of 𝒯_ι
         products = np.zeros((1, 1), dtype=np.uint8)
-        while True:
+        for _ in range(ceil(log2(initial_dimension))):
             iota += 1
             # begin construction of tower level ι.
             products = np.pad(products, ((0, 1 << iota - 1), (0, 0)), mode="constant", constant_values=0)
@@ -278,8 +281,20 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
             for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
-                self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.constants[i - 1][0]))
-        for i in range(self.max_log_h + skip_rounds):
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - i - 1, -1, -1):
-                self.constants[i][j] /= self.constants[i][0]
+                self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.field.one()))
+        self.constants = self.constants[skip_rounds:]
+
+
+class GaoMateerBasis(AdditiveNTT[F]):
+    def _precompute_constants(self, skip_rounds: int = 0) -> None:
+        initial_dimension = self.max_log_h + skip_rounds + self.log_rate
+        self.constants: list[list[F]] = [[]]
+        indeterminates_needed = ceil(log2(initial_dimension))
+        self.constants[0] = [self.field.zero()] * (1 << indeterminates_needed)
+        self.constants[0][(1 << indeterminates_needed) - 1] = self.field(1 << (1 << indeterminates_needed - 1))
+        for i in range((1 << indeterminates_needed) - 1, 0, -1):
+            self.constants[0][i - 1] = self.constants[0][i].square() + self.constants[0][i]
+        self.constants[0] = self.constants[0][:initial_dimension]  # grab only what we need
+        for i in range(1, self.max_log_h + skip_rounds):
+            self.constants.append(self.constants[0][: initial_dimension - i])  # trivial, no computation needed
         self.constants = self.constants[skip_rounds:]
