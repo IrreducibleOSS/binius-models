@@ -17,30 +17,30 @@ class AdditiveNTT(Generic[F]):
 
     # field of coefficients 𝔽_{2ʳ} == 𝔽_{2^{2ⁿ}}. note that we only allow coefficient fields of power-of-2 deg,
     # unlike in LCH14, which allows arbitrary r. the reason is that we will rep. them as a FAST tower internally.
-    def __init__(self, field: type[F], max_log_h: int, log_rate: int, skip_rounds: int = 0) -> None:
-        if field.field.degree < max_log_h + log_rate + skip_rounds:
-            raise ValueError("field degree must be at least log_h + log_rate")
+    def __init__(self, field: type[F], max_log_h: int, log_inv_rate: int, skip_rounds: int = 0) -> None:
+        if field.field.degree < max_log_h + log_inv_rate + skip_rounds:
+            raise ValueError("field degree must be at least log_h + log_inv_rate")
 
         self.field = field
         self.max_log_h = max_log_h
-        self.log_rate = log_rate
+        self.log_inv_rate = log_inv_rate
         self._precompute_constants(skip_rounds)
 
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
         self.constants: list[list[F]] = [[]]
         # self.constants is a "triangular" array containing various precomputed constants for use later.
         # it's not quite triangular, since it's rectangular (wider than it is tall); exact indexing is as follows:
-        # for each 0 ≤ i < log_h, 0 ≤ j < log_h + log_rate - 1 - i (so log_h + log_rate - 1 - i elems in row i),
+        # for each 0 ≤ i < log_h, 0 ≤ j < log_h + log_inv_rate - 1 - i (so log_h + log_inv_rate - 1 - i elems in row i),
         # self.constants[i][j] = sᵢ(vᵢ₊₁₊ⱼ), i.e., the image of the iᵗʰ subspace function on the Cantor vector vᵢ₊₁₊ⱼ.
-        # so in practice, this is a list of log_h lists, where the iᵗʰ list has log_h + log_rate - 1 - i elements.
-        for i in range(self.max_log_h + skip_rounds + self.log_rate):
+        # so in practice, this is a list of log_h lists, where the iᵗʰ list has log_h + log_inv_rate - 1 - i elements.
+        for i in range(self.max_log_h + skip_rounds + self.log_inv_rate):
             self.constants[0].append(self.field(1 << i))
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
+            for j in range(self.max_log_h + skip_rounds + self.log_inv_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.constants[i - 1][0]))
         for i in range(self.max_log_h + skip_rounds):
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - i - 1, -1, -1):
+            for j in range(self.max_log_h + skip_rounds + self.log_inv_rate - i - 1, -1, -1):
                 self.constants[i][j] /= self.constants[i][0]
         self.constants = self.constants[skip_rounds:]
 
@@ -90,11 +90,11 @@ class AdditiveNTT(Generic[F]):
 
         _X_assembler(X_poly, 0, 0)
         # claim: input_monomial now contains the representation of input in the monomial basis. time to evaluate...
-        result = [self.field.zero()] * (len(input) << self.log_rate)
-        for i in range(1 << log_h + self.log_rate):  # for each evaluation point x in the target domain...
+        result = [self.field.zero()] * (len(input) << self.log_inv_rate)
+        for i in range(1 << log_h + self.log_inv_rate):  # for each evaluation point x in the target domain...
             power_of_x = self.field.one()  # viewed as a tower element...
             value = sum(
-                (self.constants[0][j] for j in range(log_h + self.log_rate) if is_bit_set(i, j)), self.field.zero()
+                (self.constants[0][j] for j in range(log_h + self.log_inv_rate) if is_bit_set(i, j)), self.field.zero()
             )
             for j in range(1 << log_h):  # for each power j...
                 result[i] += input_monomial[j] * power_of_x
@@ -106,7 +106,7 @@ class AdditiveNTT(Generic[F]):
         return sum(
             (
                 self.constants[i][k + 1]
-                for k in range(self.max_log_h + self.log_rate - 1 - i)
+                for k in range(self.max_log_h + self.log_inv_rate - 1 - i)
                 if is_bit_set(coset << log_h - 1 - i | j, k)
             ),
             self.field.zero(),
@@ -116,9 +116,9 @@ class AdditiveNTT(Generic[F]):
         assert len(input) <= 1 << self.max_log_h, "input is too large."
         assert is_power_of_two(len(input)), "input length must be a power of 2"
         log_h = len(input).bit_length() - 1
-        assert coset in range(1 << self.log_rate + self.max_log_h - log_h), "coset must be in range"
+        assert coset in range(1 << self.log_inv_rate + self.max_log_h - log_h), "coset must be in range"
         # see Alg. 2 of Frobenius Additive FFT, [LCK+18]
-        # coset will be an int ∈ {0, ..., (1 << log_rate) - 1}, controlling which coset shift we're in
+        # coset will be an int ∈ {0, ..., (1 << log_inv_rate) - 1}, controlling which coset shift we're in
         result = input.copy()
 
         for i in range(log_h - 1, -1, -1):  # stage of butterfly, moving from left to right
@@ -139,7 +139,7 @@ class AdditiveNTT(Generic[F]):
         assert len(input) <= 1 << self.max_log_h, "input is too large."
         assert is_power_of_two(len(input)), "input length must be a power of 2"
         log_h = len(input).bit_length() - 1
-        assert coset in range(1 << self.log_rate + self.max_log_h - log_h), "coset must be in range"
+        assert coset in range(1 << self.log_inv_rate + self.max_log_h - log_h), "coset must be in range"
         result = input.copy()
 
         # Notice that we start with the largest butterfly blocks and move to the smallest
@@ -157,17 +157,17 @@ class AdditiveNTT(Generic[F]):
     def encode(self, input: list[F]) -> list[F]:
         assert len(input) <= 1 << self.max_log_h, "input is too large."
         assert is_power_of_two(len(input)), "input length must be a power of 2"
-        return sum((self._transform(input, coset) for coset in range(1 << self.log_rate)), [])
+        return sum((self._transform(input, coset) for coset in range(1 << self.log_inv_rate)), [])
 
 
 class FourStepAdditiveNTT(Generic[F]):
-    def __init__(self, field: type[F], log_h: int, log_rate: int) -> None:
-        if field.field.degree < log_h + log_rate:
-            raise ValueError("field degree must be at least log_h + log_rate")
+    def __init__(self, field: type[F], log_h: int, log_inv_rate: int) -> None:
+        if field.field.degree < log_h + log_inv_rate:
+            raise ValueError("field degree must be at least log_h + log_inv_rate")
 
         self.field = field
         self.log_h = log_h
-        self.log_rate = log_rate
+        self.log_inv_rate = log_inv_rate
 
         self.inner_ntt_log_len = self.log_h // 2
         self.outer_ntt_log_len = self.log_h - self.inner_ntt_log_len
@@ -176,17 +176,17 @@ class FourStepAdditiveNTT(Generic[F]):
 
         # rig up "outer" and "inner" NTTs. each thinks it's just an NTT internally, but will be used in our two stages.
         # the two NTTs' matrices of constants are the lower and upper halves, respectively, of the standard NTT matrix
-        # for the lower half, we have the same log_rate, and half as many columns for h; i.e., log_h >>= 1.
-        # for the upper half, we again have log_h >>= 1, but also, log_rate += log_h >> 1; i.e., the rate is higher
+        # for the lower half, we have the same log_inv_rate, and half as many columns for h; i.e., log_h >>= 1.
+        # for the upper half, we again have log_h >>= 1, but also, log_inv_rate += log_h >> 1; i.e., the rate is higher
         # in any case everything works out as it should; this is described in detail in the draw.io board
-        self.outer_ntt = AdditiveNTT(field, self.outer_ntt_log_len, log_rate, skip_rounds=self.inner_ntt_log_len)
-        self.inner_ntt = AdditiveNTT(field, self.inner_ntt_log_len, self.outer_ntt_log_len + log_rate)
+        self.outer_ntt = AdditiveNTT(field, self.outer_ntt_log_len, log_inv_rate, skip_rounds=self.inner_ntt_log_len)
+        self.inner_ntt = AdditiveNTT(field, self.inner_ntt_log_len, self.outer_ntt_log_len + log_inv_rate)
 
     def _transpose(self, input: list[list[F]]) -> list[list[F]]:
         return [[input[j][i] for j in range(self.inner_ntt_len)] for i in range(self.outer_ntt_len)]
 
     def _transform(self, input: list[F], coset: int) -> list[F]:
-        # `coset` ranges from {0, ..., (1 << log_rate) - 1}.
+        # `coset` ranges from {0, ..., (1 << log_inv_rate) - 1}.
         # transform input into a matrix, in column-major order
         input_mat = [
             [input[i + j * self.inner_ntt_len] for j in range(self.outer_ntt_len)] for i in range(self.inner_ntt_len)
@@ -203,7 +203,7 @@ class FourStepAdditiveNTT(Generic[F]):
 
     def encode(self, input: list[F]) -> list[F]:
         assert len(input) == 1 << self.log_h
-        return sum((self._transform(input, coset) for coset in range(1 << self.log_rate)), [])
+        return sum((self._transform(input, coset) for coset in range(1 << self.log_inv_rate)), [])
 
 
 class CantorAdditiveNTT(AdditiveNTT[F]):
@@ -211,11 +211,11 @@ class CantorAdditiveNTT(AdditiveNTT[F]):
     # and we can prune a few steps away from _precompute_constants.
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
         self.constants: list[list[F]] = [[]]
-        for i in range(self.max_log_h + skip_rounds + self.log_rate):
+        for i in range(self.max_log_h + skip_rounds + self.log_inv_rate):
             self.constants[0].append(self.field(1 << i))
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
+            for j in range(self.max_log_h + skip_rounds + self.log_inv_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.field.one()))
         self.constants = self.constants[skip_rounds:]
 
@@ -249,7 +249,7 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         return np.insert(augmented[:, -1][:-1], 0, 0).reshape(-1, 1)
 
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
-        initial_dimension = self.max_log_h + skip_rounds + self.log_rate
+        initial_dimension = self.max_log_h + skip_rounds + self.log_inv_rate
         self.constants: list[list[F]] = [[]]
         self.constants[0].append(self.field(1))
         iota = 0
@@ -280,14 +280,14 @@ class FancyAdditiveNTT(AdditiveNTT[F]):
         # we've gotten the top row; from this point forward, we do the usual thing
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append([])
-            for j in range(self.max_log_h + skip_rounds + self.log_rate - i):
+            for j in range(self.max_log_h + skip_rounds + self.log_inv_rate - i):
                 self.constants[i].append(self._s(self.constants[i - 1][j + 1], self.field.one()))
         self.constants = self.constants[skip_rounds:]
 
 
 class GaoMateerBasis(AdditiveNTT[F]):
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
-        initial_dimension = self.max_log_h + skip_rounds + self.log_rate
+        initial_dimension = self.max_log_h + skip_rounds + self.log_inv_rate
         self.constants: list[list[F]] = [[]]
         indeterminates_needed = ceil(log2(initial_dimension))
         self.constants[0] = [self.field.zero()] * (1 << indeterminates_needed)

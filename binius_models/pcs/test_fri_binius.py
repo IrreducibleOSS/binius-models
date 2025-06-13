@@ -3,13 +3,13 @@ import pytest
 from .fri_binius import Elem128b, FRIBinius
 
 
-@pytest.mark.parametrize("var, log_rate", [(4, 1), (5, 2)])
-def test_fri_binius(var, log_rate):
+@pytest.mark.parametrize("var, log_inv_rate", [(4, 1), (5, 2)])
+def test_fri_binius(var, log_inv_rate):
     zero = Elem128b.zero()
     one = Elem128b.one()
 
     multilinear = [Elem128b.random() for _ in range(1 << var)]
-    fri_binius = FRIBinius(Elem128b, var, log_rate)
+    fri_binius = FRIBinius(Elem128b, var, log_inv_rate)
     fri_binius.commit(multilinear)
 
     evaluation_point = [Elem128b.random() for _ in range(var)]
