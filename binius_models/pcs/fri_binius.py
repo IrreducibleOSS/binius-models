@@ -3,6 +3,7 @@ import random  # just to mock the verifier's queries; not cryptographically secu
 from ..ips.sumcheck import Sumcheck
 from ..ips.utils import Elem128b, Polynomial128
 from ..ntt.additive_ntt import AdditiveNTT
+from ..utils.utils import bit_reverse
 
 
 class VectorOracle:
@@ -17,11 +18,12 @@ class VectorOracle:
 
 
 class FRIBinius:  # (Generic[F])
-    def __init__(self, field: type[Elem128b], var: int, log_inv_rate: int):
+    def __init__(self, field: type[Elem128b], var: int, log_inv_rate: int, high_to_low: bool = False):
         self.var = var
         self.log_inv_rate = log_inv_rate
         self.field = field
-        self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_inv_rate)
+        self.high_to_low = high_to_low
+        self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_inv_rate, high_to_low=self.high_to_low)
         self.challenges: list[Elem128b] = []  # memoize the round challenges we receive from the verifier...
         self.oracle = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
@@ -35,6 +37,9 @@ class FRIBinius:  # (Generic[F])
         mult[1] += mult[0]
         mult[0] += mult[1] * position
         return (self.field.one() + r) * mult[0] + r * mult[1]
+
+    def _reverse_low_bits(self, u: int, i: int) -> int:  # only gets used in high-to-low
+        return u & -1 << self.var - i - 1 | bit_reverse(u, self.var - i - 1)
 
     def _get_preimage(self, i: int, position: int):
         # writing i = self.sumcheck round and interpreting `position` as an element of {0, 1}^{ℓ + ℛ − i - 1} ≅ S⁽ⁱ⁺¹⁾,
@@ -64,7 +69,7 @@ class FRIBinius:  # (Generic[F])
                 eq_r[1 << i | h] = eq_r[h] * r[i]
                 eq_r[h] -= eq_r[1 << i | h]
         # todo: is there a faster way to do sumcheck that exploits the structure of and_r?
-        self.sumcheck = Sumcheck([self.multilinear, eq_r], composition, False)
+        self.sumcheck = Sumcheck([self.multilinear, eq_r], composition, self.high_to_low)
 
     def advance_state(self) -> list[Elem128b]:
         return self.sumcheck.compute_round_polynomial()
@@ -74,8 +79,17 @@ class FRIBinius:  # (Generic[F])
         i = self.sumcheck.round
         next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_inv_rate - i - 1)
         for u in range(1 << self.var + self.log_inv_rate - i - 1):  # hasn't +='d round yet
-            values = (self.oracle.vectors[i][u << 1], self.oracle.vectors[i][u << 1 | 1])
-            next_round_oracle[u] = self._fold(self._get_preimage(i, u), values, r)
+            if self.high_to_low:
+                idx0 = u << 1 & -1 << self.var - i | u & (1 << self.var - i - 1) - 1  # stretch
+                idx1 = idx0 | 1 << self.var - i - 1  # fill single bit            else:
+                twiddle = self._get_preimage(i, self._reverse_low_bits(u, i))
+            else:
+                idx0 = u << 1
+                idx1 = idx0 | 1
+                twiddle = self._get_preimage(i, u)
+            values = (self.oracle.vectors[i][idx0], self.oracle.vectors[i][idx1])
+
+            next_round_oracle[u] = self._fold(twiddle, values, r)
         self.sumcheck.receive_challenge(r)
         self.oracle.commit(next_round_oracle)
 
@@ -91,9 +105,22 @@ class FRIBinius:  # (Generic[F])
         v = random.randrange(1 << self.var + self.log_inv_rate)
         c = self.field.zero()
         for i in range(self.var):
-            values = (self.oracle.vectors[i][~(~v | 0x01)], self.oracle.vectors[i][v | 0x01])  # query at coset of v
+            if self.high_to_low:
+                idx0 = v & ~(1 << self.var - i - 1)  # zero out bit at self.var - i - 1 position
+                idx1 = v | 1 << self.var - i - 1  # fill in bit at self.var - i - 1 position
+            else:
+                idx0 = ~(~v | 0x01)
+                idx1 = v | 0x01
+            values = (self.oracle.vectors[i][idx0], self.oracle.vectors[i][idx1])  # query at coset of v
+
             if i > 0:
                 assert c == self.oracle.vectors[i][v]
-            v >>= 1
-            c = self._fold(self._get_preimage(i, v), values, self.challenges[i])
+
+            if self.high_to_low:
+                v = v >> 1 & -1 << self.var - i - 1 | v & (1 << self.var - i - 1) - 1  # "squeeze" out single bit
+                twiddle = self._get_preimage(i, self._reverse_low_bits(v, i))
+            else:
+                v >>= 1
+                twiddle = self._get_preimage(i, v)
+            c = self._fold(twiddle, values, self.challenges[i])
         assert c == result

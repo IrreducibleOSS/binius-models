@@ -2,7 +2,7 @@ from math import ceil, log2
 from typing import Generic, TypeVar
 
 from ..finite_fields.tower import BinaryTowerFieldElem
-from ..utils.utils import bits_mask, is_bit_set, is_power_of_two
+from ..utils.utils import bit_reverse, bits_mask, is_bit_set, is_power_of_two
 
 F = TypeVar("F", bound=BinaryTowerFieldElem)
 
@@ -15,13 +15,16 @@ class AdditiveNTT(Generic[F]):
 
     # field of coefficients 𝔽_{2ʳ} == 𝔽_{2^{2ⁿ}}. note that we only allow coefficient fields of power-of-2 deg,
     # unlike in LCH14, which allows arbitrary r. the reason is that we will rep. them as a FAST tower internally.
-    def __init__(self, field: type[F], max_log_h: int, log_inv_rate: int, skip_rounds: int = 0) -> None:
+    def __init__(
+        self, field: type[F], max_log_h: int, log_inv_rate: int, skip_rounds: int = 0, high_to_low: bool = False
+    ) -> None:
         if field.field.degree < max_log_h + log_inv_rate + skip_rounds:
             raise ValueError("field degree must be at least log_h + log_inv_rate")
 
         self.field = field
         self.max_log_h = max_log_h
         self.log_inv_rate = log_inv_rate
+        self.high_to_low = high_to_low  # naive_encode will probably break here
         self._precompute_constants(skip_rounds)
 
     def _precompute_constants(self, skip_rounds: int = 0) -> None:
@@ -127,8 +130,13 @@ class AdditiveNTT(Generic[F]):
                 twiddle = self._calculate_twiddle(i, j, coset, log_h)
                 # at this point, `twiddle` is the correct twiddle; we will use it for each butterfly wire below
                 for k in range(1 << i):  # indexes the actual lines we're taking; all same constant
-                    idx0 = j << i + 1 | k
-                    idx1 = idx0 | 1 << i
+                    if self.high_to_low:
+                        temp = bit_reverse(j << i | k, log_h - 1)
+                        idx0 = temp << 1 & -1 << log_h - i | temp & (1 << log_h - i - 1) - 1
+                        idx1 = idx0 | 1 << log_h - 1 - i
+                    else:
+                        idx0 = j << i + 1 | k
+                        idx1 = idx0 | 1 << i
                     result[idx0] += twiddle * result[idx1]
                     result[idx1] += result[idx0]
         return result
@@ -140,14 +148,17 @@ class AdditiveNTT(Generic[F]):
         assert coset in range(1 << self.log_inv_rate + self.max_log_h - log_h), "coset must be in range"
         result = input.copy()
 
-        # Notice that we start with the largest butterfly blocks and move to the smallest
         for i in range(log_h):
             for j in range(1 << log_h - 1 - i):
                 twiddle = self._calculate_twiddle(i, j, coset, log_h)
                 for k in range(1 << i):
-                    idx0 = j << i + 1 | k
-                    idx1 = idx0 | 1 << i
-                    # Notice these two lines are swapped compared to the forward transform
+                    if self.high_to_low:
+                        temp = bit_reverse(j << i | k, log_h - 1)
+                        idx0 = temp << 1 & -1 << log_h - i | temp & (1 << log_h - i - 1) - 1
+                        idx1 = idx0 | 1 << log_h - 1 - i
+                    else:
+                        idx0 = j << i + 1 | k
+                        idx1 = idx0 | 1 << i
                     result[idx1] += result[idx0]
                     result[idx0] += twiddle * result[idx1]
         return result

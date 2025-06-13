@@ -72,6 +72,16 @@ def test_four_step_larger(Elem16b: type[BinaryTowerFieldElem]) -> None:
     assert four_step.encode(input) == ntt.encode(input)
 
 
+@pytest.mark.parametrize("Elem8b", [Elem8bFP, Elem8bFAST])
+def test_high_to_low(Elem8b: type[BinaryTowerFieldElem]) -> None:
+    # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
+    # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
+    log_h = 5
+    ntt = AdditiveNTT(Elem8b, log_h, 0, high_to_low=True)
+    input = [ntt.field.random() for _ in range(1 << log_h)]
+    assert ntt._inverse_transform(ntt.encode(input), 0) == input  # just test bijection; real test will be use in Frib
+
+
 def test_cantor() -> None:
     log_h = 5
     ntt = CantorAdditiveNTT(Elem16bFAST, log_h, 2)
