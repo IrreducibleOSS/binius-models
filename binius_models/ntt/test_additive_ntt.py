@@ -92,8 +92,8 @@ def test_cantor_fail() -> None:
 def test_inverse_smaller_input() -> None:
     max_log_h = 5
     log_h = 3
-    log_r = 2
-    ntt = AdditiveNTT(Elem8bFP, max_log_h, log_r)
+    log_inv_rate = 2
+    ntt = AdditiveNTT(Elem8bFP, max_log_h, log_inv_rate)
     input = [ntt.field.random() for _ in range(1 << log_h)]
     intermediate = ntt._inverse_transform(input, 0)
     output = ntt._transform(intermediate, 0)
@@ -103,20 +103,18 @@ def test_inverse_smaller_input() -> None:
 def test_encode_smaller_input() -> None:
     max_log_h = 5
     log_h = 3
-    log_r = 1
-    ntt = AdditiveNTT(Elem8bFP, max_log_h, log_r)
+    log_inv_rate = 1
+    ntt = AdditiveNTT(Elem32bFP, max_log_h, log_inv_rate)
     input = [ntt.field.random() for _ in range(1 << log_h)]
-    encoded_result = ntt.encode(input)
-    naive_encoded = ntt._naive_encode(input)
-    assert encoded_result == naive_encoded
+    assert ntt.encode(input) == ntt._naive_encode(input)
 
 
 def test_inverse_interleaved() -> None:
     log_h = 5
-    log_r = 2
+    log_inv_rate = 2
     tiling_factor = 1
-    ntt = AdditiveNTT(Elem8bFP, log_h, log_r)
-    skip_ntt = AdditiveNTT(Elem8bFP, log_h, log_r, skip_rounds=tiling_factor)
+    ntt = AdditiveNTT(Elem8bFP, log_h, log_inv_rate)
+    skip_ntt = AdditiveNTT(Elem8bFP, log_h, log_inv_rate, skip_rounds=tiling_factor)
     small = [ntt.field.random() for _ in range(1 << log_h - tiling_factor)]
     tiled = sum(([small[i]] * (1 << tiling_factor) for i in range(1 << log_h - tiling_factor)), [])
     small_inverse = skip_ntt._inverse_transform(small, 0)
@@ -155,7 +153,8 @@ def test_fancy_large() -> None:
 def test_gao_mateer() -> None:
     max_log_h = 7
     log_h = 5
-    mateer = GaoMateerBasis(Elem32bFP, max_log_h, 2)  # to get "full" basis, run w/ max_log_h + rate == 32
+    log_inv_rate = 2
+    mateer = GaoMateerBasis(Elem32bFP, max_log_h, log_inv_rate)  # to get "full" basis, run w/ max_log_h + rate == 32
     input = [Elem16bFP.random() for _ in range(1 << log_h)]
     mateer.encode(input)
     assert mateer.encode(input) == mateer._naive_encode(input)
