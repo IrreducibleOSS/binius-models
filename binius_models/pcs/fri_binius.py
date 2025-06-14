@@ -38,9 +38,6 @@ class FRIBinius:  # (Generic[F])
         mult[0] += mult[1] * position
         return (self.field.one() + r) * mult[0] + r * mult[1]
 
-    def _reverse_low_bits(self, u: int, i: int) -> int:  # only gets used in high-to-low
-        return u & -1 << self.var - i - 1 | bit_reverse(u, self.var - i - 1)
-
     def _get_preimage(self, i: int, position: int):
         # writing i = self.sumcheck round and interpreting `position` as an element of {0, 1}^{ℓ + ℛ − i - 1} ≅ S⁽ⁱ⁺¹⁾,
         # returns _the 0th_ among the two elements of S⁽ⁱ⁾ sitting above `position` (the other element differs by 1).
@@ -80,9 +77,11 @@ class FRIBinius:  # (Generic[F])
         next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_inv_rate - i - 1)
         for u in range(1 << self.var + self.log_inv_rate - i - 1):  # hasn't +='d round yet
             if self.high_to_low:
-                idx0 = u << 1 & -1 << self.var - i | u & (1 << self.var - i - 1) - 1  # stretch
-                idx1 = idx0 | 1 << self.var - i - 1  # fill single bit            else:
-                twiddle = self._get_preimage(i, self._reverse_low_bits(u, i))
+                u_low = u & (1 << self.var - i - 1) - 1  # least-significant self.var - i - 1 bits
+                u_high = u & (1 << self.log_inv_rate) - 1 << self.var - i - 1  # most-significant self.log_inv_rate bits
+                idx0 = u_high << 1 | u_low  # "stretch", leaving single empty bit slot at self.var - i - 1 position
+                idx1 = idx0 | 1 << self.var - i - 1  # fill single bit
+                twiddle = self._get_preimage(i, u_high | bit_reverse(u_low, self.var - i - 1))  # reverse only low part!
             else:
                 idx0 = u << 1
                 idx1 = idx0 | 1
