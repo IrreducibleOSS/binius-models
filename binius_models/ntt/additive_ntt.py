@@ -130,12 +130,11 @@ class AdditiveNTT(Generic[F]):
                 twiddle = self._calculate_twiddle(i, j, coset, log_h)
                 # at this point, `twiddle` is the correct twiddle; we will use it for each butterfly wire below
                 for k in range(1 << i):  # indexes the actual lines we're taking; all same constant
+                    idx0 = j << i + 1 | k
+                    idx1 = idx0 | 1 << i
                     if self.high_to_low:
-                        idx0 = bit_reverse(k, i) << log_h - i | bit_reverse(j, log_h - i - 1)
-                        idx1 = idx0 | 1 << log_h - 1 - i
-                    else:
-                        idx0 = j << i + 1 | k
-                        idx1 = idx0 | 1 << i
+                        idx0 = bit_reverse(idx0, log_h)
+                        idx1 = bit_reverse(idx1, log_h)
                     result[idx0] += twiddle * result[idx1]
                     result[idx1] += result[idx0]
         return result
@@ -151,12 +150,11 @@ class AdditiveNTT(Generic[F]):
             for j in range(1 << log_h - 1 - i):
                 twiddle = self._calculate_twiddle(i, j, coset, log_h)
                 for k in range(1 << i):
+                    idx0 = j << i + 1 | k
+                    idx1 = idx0 | 1 << i
                     if self.high_to_low:
-                        idx0 = bit_reverse(k, i) << log_h - i | bit_reverse(j, log_h - i - 1)
-                        idx1 = idx0 | 1 << log_h - 1 - i
-                    else:
-                        idx0 = j << i + 1 | k
-                        idx1 = idx0 | 1 << i
+                        idx0 = bit_reverse(idx0, log_h)
+                        idx1 = bit_reverse(idx1, log_h)
                     result[idx1] += result[idx0]
                     result[idx0] += twiddle * result[idx1]
         return result

@@ -116,8 +116,10 @@ class FRIBinius:  # (Generic[F])
                 assert c == self.oracle.vectors[i][v]
 
             if self.high_to_low:
-                v = v >> 1 & -1 << self.var - i - 1 | v & (1 << self.var - i - 1) - 1  # "squeeze" out single bit
-                twiddle = self._get_preimage(i, self._reverse_low_bits(v, i))
+                v_low = v & (1 << self.var - i - 1) - 1  # lowest v - i - 1 bits
+                v_high = v & (1 << self.log_inv_rate) - 1 << self.var - i  # top r bits; missing self.var - i - 1th bit!
+                v = v_high >> 1 | v_low  # squeeze out v - i - 1th bit; total length is v + r - i - 1
+                twiddle = self._get_preimage(i, v_high >> 1 | bit_reverse(v_low, self.var - i - 1))
             else:
                 v >>= 1
                 twiddle = self._get_preimage(i, v)
