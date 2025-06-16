@@ -53,8 +53,8 @@ class SumcheckManager:  # wraps a bunch of individual sumcheck claims.
 
 
 class BatchedFRIBinius:  # (Generic[F])
-    def __init__(self, field: type[Elem128b], log_rate: int, claims: list[SumcheckClaim]):
-        self.log_rate = log_rate
+    def __init__(self, field: type[Elem128b], log_inv_rate: int, claims: list[SumcheckClaim]):
+        self.log_inv_rate = log_inv_rate
         self.field = field
 
         self.claims = claims  # we assume it's sorted in descending order
@@ -65,7 +65,7 @@ class BatchedFRIBinius:  # (Generic[F])
         self.var = (len(self.concatenated) - 1).bit_length()
         self.concatenated += [Elem128b.zero()] * ((1 << self.var) - len(self.concatenated))  # zero-pad the rest
 
-        self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_rate)
+        self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_inv_rate)
         self.challenges: list[Elem128b] = []  # memoize the round challenges we receive from the verifier...
         self.oracle = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
@@ -89,7 +89,7 @@ class BatchedFRIBinius:  # (Generic[F])
         return (self.field.one() + r) * mult[0] + r * mult[1]
 
     def _get_preimage(self, i: int, position: int):
-        return self.additive_ntt._calculate_twiddle(i, position, 0, self.var + self.log_rate)
+        return self.additive_ntt._calculate_twiddle(i, position, 0, self.var + self.log_inv_rate)
 
     def commit(self) -> None:
         output = self.additive_ntt.encode(self.concatenated)
@@ -105,8 +105,8 @@ class BatchedFRIBinius:  # (Generic[F])
     def receive_challenge(self, r: Elem128b) -> list[Elem128b]:
         self.challenges.append(r)
         i = self.manager.round
-        next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_rate - i - 1)
-        for u in range(1 << self.var + self.log_rate - i - 1):  # hasn't +='d round yet
+        next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_inv_rate - i - 1)
+        for u in range(1 << self.var + self.log_inv_rate - i - 1):  # hasn't +='d round yet
             values = (self.oracle.vectors[i][u << 1], self.oracle.vectors[i][u << 1 | 1])
             next_round_oracle[u] = self._fold(self._get_preimage(i, u), values, r)
         self.manager.receive_challenge(r)
@@ -121,7 +121,7 @@ class BatchedFRIBinius:  # (Generic[F])
         # "result" is nothing other than the prover's final FRI response that he sent in the clear to the verifier.
         # note that of course in practice this whole thing will be done by the verifier,
         # and in particular the randomness will be chosen by the verifier.
-        v = random.randrange(1 << self.var + self.log_rate)  # note: this should be cryptographically random in practice
+        v = random.randrange(1 << self.var + self.log_inv_rate)
         c = self.field.zero()
         for i in range(self.var):
             values = (self.oracle.vectors[i][~(~v | 0x01)], self.oracle.vectors[i][v | 0x01])  # query at coset of v

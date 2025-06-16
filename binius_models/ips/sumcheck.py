@@ -21,7 +21,9 @@ class Sumcheck:
     each is given as a list of coefficients in the Lagrange basis, where these coefficients are 𝔽₂-elements
     """
 
-    def __init__(self, multilinears: list[list[Elem128b]], composition: Polynomial128, high_to_low: bool) -> None:
+    def __init__(
+        self, multilinears: list[list[Elem128b]], composition: Polynomial128, high_to_low: bool = False
+    ) -> None:
         length = len(multilinears[0])
         assert is_power_of_two(length)
         assert all(len(multilinear) == length for multilinear in multilinears)  # multilinears are of equal lengths

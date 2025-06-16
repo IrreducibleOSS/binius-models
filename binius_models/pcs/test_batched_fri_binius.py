@@ -3,8 +3,8 @@ import pytest
 from .batched_fri_binius import BatchedFRIBinius, Elem128b, SumcheckClaim
 
 
-@pytest.mark.parametrize("sizes, log_rate", [((4,), 1), ((3, 2, 2, 1), 1), ((3, 3, 1), 1), ((6, 4, 4, 2, 1), 2)])
-def test_batched_fri_binius(sizes, log_rate):
+@pytest.mark.parametrize("sizes, log_inv_rate", [((4,), 1), ((3, 2, 2, 1), 1), ((3, 3, 1), 1), ((6, 4, 4, 2, 1), 2)])
+def test_batched_fri_binius(sizes, log_inv_rate):
     claims = []
     for i, size in enumerate(sizes):
         assert size > 0  # constant (0-variate) multilinears are not allowed.
@@ -13,7 +13,7 @@ def test_batched_fri_binius(sizes, log_rate):
         claim = SumcheckClaim(multilinear, eq_mock, i)
         claims.append(claim)
 
-    batched_fri_binius = BatchedFRIBinius(Elem128b, log_rate, claims)
+    batched_fri_binius = BatchedFRIBinius(Elem128b, log_inv_rate, claims)
     positions = batched_fri_binius.positions
     batched_fri_binius.commit()
 

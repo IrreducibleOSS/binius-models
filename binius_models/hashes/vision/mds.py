@@ -15,7 +15,7 @@ class VisionMDSTransformation(Generic[F]):
         if log_h < 3:
             raise ValueError("log_h must be at least 3")
 
-        self.additive_ntt = AdditiveNTT(field=field, max_log_h=log_h + 2, log_rate=1)
+        self.additive_ntt = AdditiveNTT(field, log_h + 2, 1)
         self.field = field
         self.log_h = log_h
 
