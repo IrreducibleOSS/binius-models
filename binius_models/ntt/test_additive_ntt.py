@@ -4,7 +4,6 @@ from ..finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField, FASTo
 from .additive_ntt import (
     AdditiveNTT,
     CantorAdditiveNTT,
-    FancyAdditiveNTT,
     FourStepAdditiveNTT,
     GaoMateerBasis,
 )
@@ -73,6 +72,16 @@ def test_four_step_larger(Elem16b: type[BinaryTowerFieldElem]) -> None:
     assert four_step.encode(input) == ntt.encode(input)
 
 
+@pytest.mark.parametrize("Elem8b", [Elem8bFP, Elem8bFAST])
+def test_high_to_low(Elem8b: type[BinaryTowerFieldElem]) -> None:
+    # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
+    # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
+    log_h = 5
+    ntt = AdditiveNTT(Elem8b, log_h, 0, high_to_low=True)
+    input = [ntt.field.random() for _ in range(1 << log_h)]
+    assert ntt._inverse_transform(ntt.encode(input), 0) == input  # just test bijection; real test will be use in Frib
+
+
 def test_cantor() -> None:
     log_h = 5
     ntt = CantorAdditiveNTT(Elem16bFAST, log_h, 2)
@@ -92,8 +101,8 @@ def test_cantor_fail() -> None:
 def test_inverse_smaller_input() -> None:
     max_log_h = 5
     log_h = 3
-    log_r = 2
-    ntt = AdditiveNTT(Elem8bFP, max_log_h, log_r)
+    log_inv_rate = 2
+    ntt = AdditiveNTT(Elem8bFP, max_log_h, log_inv_rate)
     input = [ntt.field.random() for _ in range(1 << log_h)]
     intermediate = ntt._inverse_transform(input, 0)
     output = ntt._transform(intermediate, 0)
@@ -103,20 +112,18 @@ def test_inverse_smaller_input() -> None:
 def test_encode_smaller_input() -> None:
     max_log_h = 5
     log_h = 3
-    log_r = 1
-    ntt = AdditiveNTT(Elem8bFP, max_log_h, log_r)
+    log_inv_rate = 1
+    ntt = AdditiveNTT(Elem32bFP, max_log_h, log_inv_rate)
     input = [ntt.field.random() for _ in range(1 << log_h)]
-    encoded_result = ntt.encode(input)
-    naive_encoded = ntt._naive_encode(input)
-    assert encoded_result == naive_encoded
+    assert ntt.encode(input) == ntt._naive_encode(input)
 
 
 def test_inverse_interleaved() -> None:
     log_h = 5
-    log_r = 2
+    log_inv_rate = 2
     tiling_factor = 1
-    ntt = AdditiveNTT(Elem8bFP, log_h, log_r)
-    skip_ntt = AdditiveNTT(Elem8bFP, log_h, log_r, skip_rounds=tiling_factor)
+    ntt = AdditiveNTT(Elem8bFP, log_h, log_inv_rate)
+    skip_ntt = AdditiveNTT(Elem8bFP, log_h, log_inv_rate, skip_rounds=tiling_factor)
     small = [ntt.field.random() for _ in range(1 << log_h - tiling_factor)]
     tiled = sum(([small[i]] * (1 << tiling_factor) for i in range(1 << log_h - tiling_factor)), [])
     small_inverse = skip_ntt._inverse_transform(small, 0)
@@ -131,31 +138,11 @@ def test_inverse_interleaved() -> None:
     assert tricky_inverse == naive_inverse
 
 
-def test_fancy_large() -> None:
-    # length 2⁵, rate 1/4, so 4× in length. note that the block length is only 2⁷ here;
-    # the code will "intelligently" know to only do this over the smaller field 𝔽_{2⁸}.
-    max_log_h = 20
-    log_h = 7
-    cantor = CantorAdditiveNTT(Elem32bFAST, max_log_h, 2)
-    fancy = FancyAdditiveNTT(Elem32bFP, max_log_h, 2)
-    input = [Elem16bFAST.random() for _ in range(1 << log_h)]
-
-    def convert_element(element: Elem16bFAST) -> Elem16bFP:  # this is only for testing; it's an abuse of "constants"
-        return sum(
-            (fancy.constants[0][i] if (element.value >> i) & 1 else Elem16bFP.zero() for i in range(1 << 4)),
-            Elem16bFP.zero(),
-        )
-
-    def convert_list(input: list[Elem16bFAST]) -> list[Elem16bFP]:
-        return [convert_element(element) for element in input]
-
-    assert fancy.encode(convert_list(input)) == convert_list(cantor.encode(input))
-
-
 def test_gao_mateer() -> None:
     max_log_h = 7
     log_h = 5
-    mateer = GaoMateerBasis(Elem32bFP, max_log_h, 2)  # to get "full" basis, run w/ max_log_h + rate == 32
+    log_inv_rate = 2
+    mateer = GaoMateerBasis(Elem32bFP, max_log_h, log_inv_rate)  # to get "full" basis, run w/ max_log_h + rate == 32
     input = [Elem16bFP.random() for _ in range(1 << log_h)]
     mateer.encode(input)
     assert mateer.encode(input) == mateer._naive_encode(input)
