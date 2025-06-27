@@ -11,7 +11,7 @@ exclude=["*.sage.py", "binius_models/sage/sageside"]
 python = "^3.11"
 numpy = "^1.24.3"
 tqdm = "^4.65.0"
-galois = "^0.3.5"
+galois = "^0.4.6"
 sympy = "1.12.1"
 
 [tool.poetry.group.dev.dependencies]
