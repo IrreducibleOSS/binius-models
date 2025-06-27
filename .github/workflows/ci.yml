@@ -19,6 +19,8 @@ jobs:
 
       - name: Set up Python from .python-version
         uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
@@ -41,6 +43,8 @@ jobs:
 
       - name: Set up Python from .python-version
         uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Set up Poetry
         uses: abatilo/actions-poetry@v4
