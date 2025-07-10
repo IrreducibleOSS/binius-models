@@ -108,8 +108,8 @@ class FRIBinius:  # (Generic[F])
                 idx0 = v & ~(1 << self.var - i - 1)  # zero out bit at self.var - i - 1 position
                 idx1 = v | 1 << self.var - i - 1  # fill in bit at self.var - i - 1 position
             else:
-                idx0 = ~(~v | 0x01)
-                idx1 = v | 0x01
+                idx0 = v & ~0x01  # zero out lsb
+                idx1 = v | 0x01  # one-ify lsb
             values = (self.oracle.vectors[i][idx0], self.oracle.vectors[i][idx1])  # query at coset of v
 
             if i > 0:
@@ -121,7 +121,7 @@ class FRIBinius:  # (Generic[F])
                 v = v_high >> 1 | v_low  # squeeze out v - i - 1th bit; total length is v + r - i - 1
                 twiddle = self._get_preimage(i, v_high >> 1 | bit_reverse(v_low, self.var - i - 1))
             else:
-                v >>= 1
+                v >>= 1  # shift out lowest bit
                 twiddle = self._get_preimage(i, v)
             c = self._fold(twiddle, values, self.challenges[i])
         assert c == result
