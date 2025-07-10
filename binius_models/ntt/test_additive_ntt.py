@@ -144,5 +144,4 @@ def test_gao_mateer() -> None:
     log_inv_rate = 2
     mateer = GaoMateerBasis(Elem32bFP, max_log_h, log_inv_rate)  # to get "full" basis, run w/ max_log_h + rate == 32
     input = [Elem16bFP.random() for _ in range(1 << log_h)]
-    mateer.encode(input)
     assert mateer.encode(input) == mateer._naive_encode(input)

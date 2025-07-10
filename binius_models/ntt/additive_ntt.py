@@ -55,7 +55,7 @@ class AdditiveNTT(Generic[F]):
         assert is_power_of_two(len(input)), "input length must be a power of 2"
         log_h = len(input).bit_length() - 1
         s_polys = [[self.field.one()]]  # sparse! include log-many coordinates
-        normalization_constants = [self.field.one()]
+        normalization_constants = [self.constants[0][0]]
         for i in range(1, log_h):
             s_polys.append([self.field.zero()] * (i + 1))
             for j in range(i, 0, -1):
@@ -87,7 +87,7 @@ class AdditiveNTT(Generic[F]):
             for i, coefficient in enumerate(s_polys[level][: level + 1]):  # this thing is sparse!
                 for j in range(index + 1):
                     X_poly_times_s[j + (1 << i)] += coefficient * X_poly[j]
-            _X_assembler(X_poly_times_s, level + 1, index | 1 << level)
+            _X_assembler(X_poly_times_s, level + 1, 1 << level | index)
 
         _X_assembler(X_poly, 0, 0)
         # claim: input_monomial now contains the representation of input in the monomial basis. time to evaluate...
