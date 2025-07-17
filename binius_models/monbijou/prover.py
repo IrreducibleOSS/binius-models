@@ -1,6 +1,6 @@
 import galois
 
-from .constraint_system import ConstraintSystem
+from .constraint_system import ConstraintSystem, ShiftOp
 from .field import field
 
 
@@ -23,6 +23,7 @@ class Prover:
     def __init__(self, constraint_system: ConstraintSystem, witness: Witness):
         assert len(witness.data) == 1 << constraint_system.l_words
         assert all(witness.data[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
+        assert 1 << constraint_system.l_and == len(constraint_system.and_constraints)
         self.constraint_system = constraint_system
 
         # begin populating inner
@@ -47,7 +48,7 @@ class Prover:
         # and then finish the job using n mults and n divisions. total n - 1 + 2 ⋅ n == 3 ⋅ n - 1 mults and n inversions
 
         # we are going to be slightly cleverer. for each i, we want the all-but-one product p[i] ≔ ∏_{j ≠ i} (r'_ẑ – j)
-        # if we have those, we can finish the job w/ n further mults, by setting L̃(r'_ẑ, i) ≔ p[i] ⋅ w[i] for each i.
+        # if we have those, we can finish the job w/ no further mults, by setting L̃(r'_ẑ, i) ≔ p[i] ⋅ w[i] for each i.
         # we can get the all-but-one products with 2 ⋅ n space overhead by precomputing the prefix and suffix products
         # when all is said and done, we get 2 ⋅ (n – 1) + 2 ⋅ n = 4 ⋅ n - 2 mults, so we replaced invs --> mults
         # the problem size is small---but see later whether we end up needing this in any "hot" parts of the code?
@@ -71,8 +72,10 @@ class Prover:
 
         # this method can be viewed as a stand-in for the prover's univariate skip, in terms of the state we're left in.
         # will take this opportunity to memoize l_tilde ≔ L̃(r'_ẑ, i); the prover would compute this at the end of skip
+        # and also memoize r_x_prime and r_zhat_prime
         assert len(r_x_prime) == self.constraint_system.l_and
         self.l_tilde = self._l_tilde(r_zhat_prime)
+        self.r_x_prime = r_x_prime
 
         def extrapolate_bitstring(value):
             # interpreting `value` as the (bit-valued!) evaluations of some univariate polynomial over the domain D,
@@ -80,34 +83,66 @@ class Prover:
             return sum((self.l_tilde[i] for i in range(64) if value >> i & 1), field(0))
 
         def evaluate(m):
-            univariate_partial = [extrapolate_bitstring(m[i]) for i in range(1 << self.constraint_system.l_and)]
-            for i in range(self.constraint_system.l_and):
+            univariate = [extrapolate_bitstring(m[i]) for i in range(1 << self.constraint_system.l_and)]  # specialize
+            for i in range(self.constraint_system.l_and):  # now fold
                 for j in range(1 << self.constraint_system.l_and - i - 1):
-                    univariate_partial[j] = univariate_partial[j << 1] + r_x_prime[i] * (
-                        univariate_partial[j << 1 | 1] - univariate_partial[j << 1]
-                    )
-            return univariate_partial[0]
+                    univariate[j] = univariate[j << 1] + r_x_prime[i] * (univariate[j << 1 | 1] - univariate[j << 1])
+            return univariate[0]
 
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
     def initiate_first_phase(
         self, lambda_a: galois.FieldElement, lambda_b: galois.FieldElement, lambda_c: galois.FieldElement
     ):
-        h_sll = []
-        h_srl = []
-        h_sra = []
+        r_x_tensor = [field(1)] * (1 << self.constraint_system.l_and)
+        for i in range(self.constraint_system.l_and):
+            for j in range(1 << i):
+                r_x_tensor[1 << i | j] = r_x_tensor[j] * self.r_x_prime[i]
+                r_x_tensor[j] -= r_x_tensor[1 << i | j]
+        # for each op × m × s, M[op][m][s] is Mₒₚ(r'ₓ, Y, s), the partial specialization of Mₒₚ(X, Y, s) at r'ₓ.
+        # this looks like taking the Mₒₚ(X, Y, s) matrix, which is n_{and} × n_{word}, and folding it by ⊗(r'ₓ).
+        # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
+        # the result is a length-n_{words} row-vector; moreover, we have a such thing for each op × m × s.
+        # since Mₒₚ(X, Y, s) is sparse + binary, we can get this by allocating n_{words} and iterating through the 1s.
+        M = {
+            ShiftOp.SLL: {
+                "a": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "b": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "c": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+            },
+            ShiftOp.SRL: {
+                "a": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "b": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "c": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+            },
+            ShiftOp.SRA: {
+                "a": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "b": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "c": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
+            },
+        }
+        for i, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
+            for j, op, s in I_a:
+                M[op]["a"][s][j] += r_x_tensor[i]
+            for j, op, s in I_b:
+                M[op]["b"][s][j] += r_x_tensor[i]
+            for j, op, s in I_c:
+                M[op]["c"][s][j] += r_x_tensor[i]
 
-        # prepare h_op(j, s) for each j, s
+        # THE BELOW IS NOT DONE AND NEEDS TO BE FIXED
+        result = [[field(0)] * 64 for _ in range(64)]
         for j in range(64):
-            h_sll.append(self.l_tilde[j:] + [field(0)] * j)
-            h_srl.append(list(reversed(self.l_tilde[: j + 1])) + [field(0)] * (64 - 1 - j))
-            h_sra.append(list(reversed(self.l_tilde[: j + 1])) + [field(0)] * (64 - 1 - j))
-        for s in range(1, 64):
-            h_sra[63][s] += h_sra[63][s - 1]
-
-        for j in range(64):
-            for s in range(64):
-                g_op_i_j = field(0)
+            # begin contribution of sll to result[j][s]
+            for s in range(64 - j):  # not all s's will have nonzero h_sll(j, s)! only sum over the ones that do.
+                g_sll_sum = field(0)
                 for m, lambda_m in [(self.a, lambda_a), (self.b, lambda_b), (self.c, lambda_c)]:
-                    g_op_i_j += lambda_m * field(0)
-                h_sll[j][s] *= g_op_i_j
+                    g_sll_sum += lambda_m * field(0)
+
+                result[j][s] = g_sll_sum * self.l_tilde[j + s]  # h_sll(j, s) = L̃(r'_ẑ, j + s)
+            # begin contribution of srl to result[j][s]
+            for s in range(j + 1):  # not all s's will have nonzero h_srl(j, s)! only sum over the ones that do.
+                g_srl_sum = field(0)
+                for m, lambda_m in [(self.a, lambda_a), (self.b, lambda_b), (self.c, lambda_c)]:
+                    g_srl_sum += lambda_m * field(0)
+
+                result[j][s] += g_srl_sum * self.l_tilde[j - s]
