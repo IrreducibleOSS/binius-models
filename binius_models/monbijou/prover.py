@@ -4,11 +4,6 @@ from .constraint_system import ConstraintSystem, ShiftOp
 from .field import field
 
 
-class Witness:
-    def __init__(self, data: list[int]):
-        self.data = data
-
-
 class Prover:
     def _precompute_barycentric_weights(self):
         self.w = []
@@ -20,9 +15,9 @@ class Prover:
                 product *= field(i ^ j)
             self.w.append(product**-1)
 
-    def __init__(self, constraint_system: ConstraintSystem, witness: Witness):
-        assert len(witness.data) == 1 << constraint_system.l_words
-        assert all(witness.data[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
+    def __init__(self, constraint_system: ConstraintSystem, witness: list[int]):
+        assert len(witness) == 1 << constraint_system.l_words
+        assert all(witness[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
         assert 1 << constraint_system.l_and == len(constraint_system.and_constraints)
         self.constraint_system = constraint_system
 
@@ -104,7 +99,7 @@ class Prover:
         # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
         # the result is a length-n_{words} row-vector; moreover, we have a such thing for each op × m × s.
         # since Mₒₚ(X, Y, s) is sparse + binary, we can get this by allocating n_{words} and iterating through the 1s.
-        M = {
+        M = {  # outer index s; inner index y
             ShiftOp.SLL: {
                 "a": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
                 "b": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
@@ -121,13 +116,41 @@ class Prover:
                 "c": [[field(0)] * (1 << self.constraint_system.l_words) for _ in range(64)],
             },
         }
-        for i, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
-            for j, op, s in I_a:
-                M[op]["a"][s][j] += r_x_tensor[i]
-            for j, op, s in I_b:
-                M[op]["b"][s][j] += r_x_tensor[i]
-            for j, op, s in I_c:
-                M[op]["c"][s][j] += r_x_tensor[i]
+        for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
+            for y, op, s in I_a:
+                M[op]["a"][s][y] += r_x_tensor[x]
+            for y, op, s in I_b:
+                M[op]["b"][s][y] += r_x_tensor[x]
+            for y, op, s in I_c:
+                M[op]["c"][s][y] += r_x_tensor[x]
+
+        g = {  # outer index j, inner index s
+            ShiftOp.SLL: {
+                "a": [[field(0)] * 64 for _ in range(64)],
+                "b": [[field(0)] * 64 for _ in range(64)],
+                "c": [[field(0)] * 64 for _ in range(64)],
+            },
+            ShiftOp.SRL: {
+                "a": [[field(0)] * 64 for _ in range(64)],
+                "b": [[field(0)] * 64 for _ in range(64)],
+                "c": [[field(0)] * 64 for _ in range(64)],
+            },
+            ShiftOp.SRA: {
+                "a": [[field(0)] * 64 for _ in range(64)],
+                "b": [[field(0)] * 64 for _ in range(64)],
+                "c": [[field(0)] * 64 for _ in range(64)],
+            },
+        }
+        for y in range(1 << self.constraint_system.l_words):
+            w_y = self.witness[y]
+            for j in range(64):
+                # todo: there is a bitwise / simd-ish vibe here; revisit whether there is some clever memory stuff
+                if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
+                    for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]:
+                        for m in ["a", "b", "c"]:
+                            for s in range(64):
+                                g[op][m][j][s] += M[op][m][s][y]
+                w_y >>= 1
 
         # THE BELOW IS NOT DONE AND NEEDS TO BE FIXED
         result = [[field(0)] * 64 for _ in range(64)]

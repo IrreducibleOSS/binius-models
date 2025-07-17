@@ -2,7 +2,7 @@ import random
 
 from .constraint_system import ConstraintSystem, ShiftOp
 from .field import field
-from .prover import Prover, Witness
+from .prover import Prover
 from .verifier import Verifier
 
 constraint_system = ConstraintSystem(
@@ -54,9 +54,8 @@ constraint_system = ConstraintSystem(
 
 
 def test_good():
-    data = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
-    data[63] = (ShiftOp.SRA(data[2], 5) ^ ShiftOp.SRL(data[5], 5)) & ShiftOp.SLL(data[10], 55)
-    witness = Witness(data)
+    witness = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
+    witness[63] = (ShiftOp.SRA(witness[2], 5) ^ ShiftOp.SRL(witness[5], 5)) & ShiftOp.SLL(witness[10], 55)
     prover = Prover(constraint_system, witness)
 
     r_zhat_prime = field.Random()
