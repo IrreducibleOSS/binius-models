@@ -3,6 +3,7 @@ import random
 from .constraint_system import ConstraintSystem, ShiftOp
 from .field import field
 from .prover import Prover, Witness
+from .verifier import Verifier
 
 constraint_system = ConstraintSystem(
     l_and=3,
@@ -61,6 +62,9 @@ def test_good():
     r_zhat_prime = field.Random()
     r_x_prime = [field.Random() for _ in range(constraint_system.l_and)]
     (alpha_a, alpha_b, alpha_c) = prover._directly_evaluate(r_zhat_prime, r_x_prime)
+
+    verifier = Verifier(constraint_system)
+    verifier.verify_shift_reduction(prover, alpha_a, alpha_b, alpha_c)
 
 
 # negative tests, to do:

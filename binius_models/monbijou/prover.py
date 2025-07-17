@@ -10,11 +10,6 @@ class Witness:
 
 
 class Prover:
-    def _check_witness(self, a: list[int], b: list[int], c: list[int]):
-        # this is a dumb sanity check method only used as a debug assert.
-        for i in range(1 << self.constraint_system.l_and):
-            assert a[i] & b[i] == c[i]
-
     def _precompute_barycentric_weights(self):
         self.w = []
         for i in range(64):
@@ -27,6 +22,7 @@ class Prover:
 
     def __init__(self, constraint_system: ConstraintSystem, witness: Witness):
         assert len(witness.data) == 1 << constraint_system.l_words
+        assert all(witness.data[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
         self.constraint_system = constraint_system
 
         # begin populating inner
@@ -42,7 +38,7 @@ class Prover:
             for j, op, s in I_c:
                 self.c[i] ^= op(witness.data[j], s)
 
-        self._check_witness(self.a, self.b, self.c)
+        assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
     def _l_tilde(self, r_zhat_prime):
         # computes the list L̃(r'_ẑ, i), for i ∈ {0, … , 63}. the standard barycentric approach is to realize that,
@@ -72,21 +68,46 @@ class Prover:
         # as for the verifier, my guess is that the prover will nondeterministically send them to the verifier,
         # so that the verifier can wrap up the univariate skip. pending the correctness of the supplied values.
         # the verifier will thus be done with univariate skip, and can turn his attention to the shift reduction.
+
+        # this method can be viewed as a stand-in for the prover's univariate skip, in terms of the state we're left in.
+        # will take this opportunity to memoize l_tilde ≔ L̃(r'_ẑ, i); the prover would compute this at the end of skip
         assert len(r_x_prime) == self.constraint_system.l_and
-        l_tilde = self._l_tilde(r_zhat_prime)
+        self.l_tilde = self._l_tilde(r_zhat_prime)
 
         def extrapolate_bitstring(value):
             # interpreting `value` as the (bit-valued!) evaluations of some univariate polynomial over the domain D,
             # returns that polynomial's value at r'_x. because we precomputed L̃(r'_ẑ, i), just now need a subset sum.
-            return sum((l_tilde[i] for i in range(64) if value >> i & 1), field(0))
+            return sum((self.l_tilde[i] for i in range(64) if value >> i & 1), field(0))
 
         def evaluate(m):
             univariate_partial = [extrapolate_bitstring(m[i]) for i in range(1 << self.constraint_system.l_and)]
             for i in range(self.constraint_system.l_and):
                 for j in range(1 << self.constraint_system.l_and - i - 1):
                     univariate_partial[j] = univariate_partial[j << 1] + r_x_prime[i] * (
-                        univariate_partial[j << 1 | 1] - univariate_partial[j]
+                        univariate_partial[j << 1 | 1] - univariate_partial[j << 1]
                     )
             return univariate_partial[0]
 
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
+
+    def initiate_first_phase(
+        self, lambda_a: galois.FieldElement, lambda_b: galois.FieldElement, lambda_c: galois.FieldElement
+    ):
+        h_sll = []
+        h_srl = []
+        h_sra = []
+
+        # prepare h_op(j, s) for each j, s
+        for j in range(64):
+            h_sll.append(self.l_tilde[j:] + [field(0)] * j)
+            h_srl.append(list(reversed(self.l_tilde[: j + 1])) + [field(0)] * (64 - 1 - j))
+            h_sra.append(list(reversed(self.l_tilde[: j + 1])) + [field(0)] * (64 - 1 - j))
+        for s in range(1, 64):
+            h_sra[63][s] += h_sra[63][s - 1]
+
+        for j in range(64):
+            for s in range(64):
+                g_op_i_j = field(0)
+                for m, lambda_m in [(self.a, lambda_a), (self.b, lambda_b), (self.c, lambda_c)]:
+                    g_op_i_j += lambda_m * field(0)
+                h_sll[j][s] *= g_op_i_j
