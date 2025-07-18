@@ -16,7 +16,16 @@ class Prover(Generic[F]):
         assert len(witness) == 1 << constraint_system.l_words
         assert all(witness[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
         assert 1 << constraint_system.l_and == len(constraint_system.and_constraints)
-        self._precompute_barycentric_weights()
+
+        # begin computation of barycentric weight (!). indeed, just one weight, not many.
+        # it's a fact that when the interpolation domain is a power of 2, then all barycentric weights wind up identical
+        # if the domain is of size 2ᵏ, then for each i ∈ {0, … , 2ᵏ − 1}, { i ⊕ j | j ≠ i } == {1, … , 2ᵏ − 1} (!).
+        # indeed for each i, xor-with-i is a bijection on {0, … , 2ᵏ − 1} ≅ ℤ₂ᵏ. its image, \ {0}, is {1, … , 2ᵏ − 1}.
+        # it's enough to take the product of the elements of {1, … , 2ᵏ − 1}, and then invert that, to get our "weight".
+        w = self.field(1)
+        for i in range(1, 64):
+            w *= self.field(i)
+        self.w = w.inverse()
 
         # begin populating inner
         self.a = [0] * (1 << constraint_system.l_and)
@@ -48,16 +57,6 @@ class Prover(Generic[F]):
 
         assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
-    def _precompute_barycentric_weights(self):
-        self.w = []
-        for i in range(64):
-            product = self.field.one()
-            for j in range(64):
-                if j == i:
-                    continue
-                product *= self.field(i ^ j)
-            self.w.append(product.inverse())
-
     def _l_tilde(self, r_zhat_prime):
         # computes the list L̃(r'_ẑ, i), for i ∈ {0, … , 63}. the standard barycentric approach is to realize that,
         # for each i, L̃(r'_ẑ, i) == ∏ⱼ(r'_ẑ – j) ⋅ [ w[i] / (r'_ẑ – i) ], where w[i] are the barycentric weights.
@@ -76,7 +75,7 @@ class Prover(Generic[F]):
             suffixes[64 - 1 - i] = suffixes[64 - i] * (r_zhat_prime - self.field(64 - i))
         result = [self.field.zero()] * 64
         for i in range(64):
-            result[i] = prefixes[i] * suffixes[i] * self.w[i]
+            result[i] = prefixes[i] * suffixes[i] * self.w  # these are all the same....! can you save?
         return result
 
     def _directly_evaluate(self, r_zhat_prime, r_x_prime):
