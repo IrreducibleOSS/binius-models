@@ -1,7 +1,7 @@
 import random  # just to mock the verifier's queries; not cryptographically secure
 
 from ..ips.sumcheck import Sumcheck
-from ..ips.utils import Elem128b, Polynomial128
+from ..ips.utils import Elem128b, Polynomial
 from ..ntt.additive_ntt import AdditiveNTT
 from ..utils.utils import bit_reverse
 
@@ -59,7 +59,7 @@ class FRIBinius:  # (Generic[F])
 
     def initialize_proof(self, r: list[Elem128b]) -> None:
         assert len(r) == self.var
-        composition = Polynomial128(2, {tuple([1, 1]): Elem128b.one()})
+        composition = Polynomial(2, {tuple([1, 1]): Elem128b.one()})
         eq_r = [Elem128b.one()] + [Elem128b.zero()] * (len(self.multilinear) - 1)
         for i in range(self.var):
             for h in range(1 << i):

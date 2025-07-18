@@ -15,10 +15,7 @@
 # [DP24]: https://eprint.iacr.org/2024/504.pdf
 # [D24]: https://hackmd.io/@benediamond/BJgKxUau0
 from ..ips.sumcheck import Sumcheck
-
-# We are temporarily importing Polynomial128, because the sumcheck code
-# uses it. Eventually it will be replaced by Polynomial
-from ..ips.utils import Polynomial128
+from ..ips.utils import Polynomial
 from .fri_binius import FRIBinius
 
 # This code again fixes L / K to be 𝔽_{2¹²⁸} / 𝔽_{2⁸} via the below imports.
@@ -63,7 +60,7 @@ class RingSwitching:
             )
             for i in range(1 << self.fri_binius.var)
         ]
-        composition_poly = Polynomial128(2, {tuple([1, 1]): LargeFieldElem.one()})
+        composition_poly = Polynomial(2, {tuple([1, 1]): LargeFieldElem.one()})
         self.sumcheck = Sumcheck([self.fri_binius.multilinear, a], composition_poly, False)
         # compute ŝ := φ₁(t')(φ₀(r_κ), … , φ₀(r_{ℓ − 1})), which is an element of A := L ⊗_K L.
         tensor_expansion_second_chunk_r = tensor_expansion(r[self.kappa :])

@@ -143,7 +143,7 @@ class FrobeniusNTT:
         self._encode_helper(input, output, self.log_h + self.log_inv_rate, 0, 0, 0, 0, 0)
         return output
 
-    def unpack_output(self, output: list[Elem1bFP]) -> Elem128bFP:  # <---- bigger than necessary
+    def unpack_output(self, output: list[Elem1bFP]) -> list[Elem1bFP]:  # <---- bigger than necessary
         # `output` is the condensed, raw bit-output of the Frobenius NTT.
         # `index`: an log_h + log_inv_rate-bit integer, index of the desired output element we want to conjure.
         initial_dimension = self.log_h + self.log_inv_rate

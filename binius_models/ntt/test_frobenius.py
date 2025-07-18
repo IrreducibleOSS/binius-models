@@ -1,10 +1,6 @@
 from ..finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
 from .additive_ntt import GaoMateerBasis
-from .frobenius import FrobeniusNTT
-
-
-class Elem1bFP(BinaryTowerFieldElem):
-    field = FanPaarTowerField(0)
+from .frobenius import Elem1bFP, FrobeniusNTT
 
 
 class Elem32bFP(BinaryTowerFieldElem):

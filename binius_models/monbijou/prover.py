@@ -34,7 +34,7 @@ class Prover(Generic[F]):
         # in this case, M[op][m][s][y] below will be the sum of exactly two entries of the tensor of r'ₓ.
         # i.e., the fact of two entries being present in that column will be accounted for during the computation of M.
         # next, for each j for which w(j, s) = 1, we only want to add M[op][m][s][y] once to g[op][m][j][s], not twice.
-        self.column_index = [set() for _ in range(1 << constraint_system.l_words)]
+        self.column_index: list[set[int]] = [set() for _ in range(1 << constraint_system.l_words)]
         for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
             for j, op, s in I_a:
                 self.a[i] ^= op(self.witness[j], s)
@@ -210,7 +210,7 @@ class Prover(Generic[F]):
             sum(h[ShiftOp.SRA], []),
             sum(g[ShiftOp.SRA]["a"], []),
         ]
-        composition = MultivariatePolynomial(  # ∑ₒₚ hₒₚ ⋅ gₒₚ
+        composition = Polynomial(  # ∑ₒₚ hₒₚ ⋅ gₒₚ
             6,
             {
                 (1, 1, 0, 0, 0, 0): self.field.one(),
