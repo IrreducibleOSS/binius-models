@@ -102,6 +102,18 @@ class Prover:
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
     def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
+        h = {
+            ShiftOp.SLL: [],
+            ShiftOp.SRL: [],
+            ShiftOp.SRA: [],
+        }
+        for j in range(64):
+            h[ShiftOp.SLL].append(self.l_tilde[j:] + [field(0)] * j)
+            h[ShiftOp.SRL].append(list(reversed(self.l_tilde[: j + 1])) + [field(0)] * (64 - 1 - j))
+            h[ShiftOp.SRA].append(list(reversed(self.l_tilde[: j + 1])) + [field(0)] * (64 - 1 - j))
+        for s in range(1, 64):
+            h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
+
         r_x_tensor = [field(1)] * (1 << self.constraint_system.l_and)
         for i in range(self.constraint_system.l_and):
             for j in range(1 << i):
@@ -163,22 +175,17 @@ class Prover:
                         g[op][m][j][s] += M[op][m][s][y]
                 w_y >>= 1
 
-        m_lambda = [("a", lambda_a), ("b", lambda_b), ("c", lambda_c)]  # just to save some characters
-        l_tilde_suffixes = [self.l_tilde[63]] * 64
-        for i in range(1, 64):
-            l_tilde_suffixes[i] = l_tilde_suffixes[i - 1] + self.l_tilde[64 - 1 - i]
-        result = [[field(0)] * 64 for _ in range(64)]
+        # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
         for j in range(64):
-            for s in range(64 - j):  # not all s's will have nonzero h_sll(j, s)! only sum over the ones that do.
-                result[j][s] = self.l_tilde[j + s] * sum(
-                    (g[ShiftOp.SLL][m][j][s] * lambda_m for m, lambda_m in m_lambda), field(0)
-                )
-            for s in range(j + 1):  # not all s's will have nonzero h_srl(j, s)! only sum over the ones that do.
-                result[j][s] += self.l_tilde[j - s] * sum(
-                    (g[ShiftOp.SRL][m][j][s] * lambda_m for m, lambda_m in m_lambda), field(0)
-                )
-            for s in range(j + 1):
-                result[j][s] += (self.l_tilde[j - s] if j < 63 else l_tilde_suffixes[i]) * sum(  # last row special
-                    (g[ShiftOp.SRA][m][j][s] * lambda_m for m, lambda_m in m_lambda), field(0)
-                )
-        # at this point, result[j][s] should be ready to (be flattened and) run sumcheck on.
+            for s in range(64):
+                g[ShiftOp.SLL]["a"][j][s] *= lambda_a
+                g[ShiftOp.SLL]["a"][j][s] += lambda_b * g[ShiftOp.SLL]["b"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] += lambda_c * g[ShiftOp.SLL]["c"][j][s]
+
+                g[ShiftOp.SRL]["a"][j][s] *= lambda_a
+                g[ShiftOp.SRL]["a"][j][s] += lambda_b * g[ShiftOp.SRL]["b"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] += lambda_c * g[ShiftOp.SRL]["c"][j][s]
+
+                g[ShiftOp.SRA]["a"][j][s] *= lambda_a
+                g[ShiftOp.SRA]["a"][j][s] += lambda_b * g[ShiftOp.SRA]["b"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] += lambda_c * g[ShiftOp.SRA]["c"][j][s]
