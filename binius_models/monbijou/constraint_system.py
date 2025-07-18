@@ -16,14 +16,7 @@ class ShiftOp(Enum):
 
 
 class ConstraintSystem:
-    def __init__(
-        self,
-        l_and: int,
-        l_words: int,
-        and_constraints: list[
-            tuple[list[tuple[int, ShiftOp, int]], list[tuple[int, ShiftOp, int]], list[tuple[int, ShiftOp, int]]]
-        ],
-    ):
+    def __init__(self, l_and: int, l_words: int, and_constraints):
         self.l_and = l_and
         self.l_words = l_words
         self.and_constraints = and_constraints

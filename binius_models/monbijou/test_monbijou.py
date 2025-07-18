@@ -62,8 +62,8 @@ def test_good():
     r_x_prime = [field.Random() for _ in range(constraint_system.l_and)]
     (alpha_a, alpha_b, alpha_c) = prover._directly_evaluate(r_zhat_prime, r_x_prime)
 
-    verifier = Verifier(constraint_system)
-    verifier.verify_shift_reduction(prover, alpha_a, alpha_b, alpha_c)
+    verifier = Verifier(constraint_system, prover)
+    verifier.verify_shift_reduction(alpha_a, alpha_b, alpha_c)
 
 
 # negative tests, to do:

@@ -1,5 +1,3 @@
-import galois
-
 from .constraint_system import ConstraintSystem, ShiftOp
 from .field import field
 
@@ -19,7 +17,9 @@ class Prover:
         assert len(witness) == 1 << constraint_system.l_words
         assert all(witness[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
         assert 1 << constraint_system.l_and == len(constraint_system.and_constraints)
+        self._precompute_barycentric_weights()
         self.constraint_system = constraint_system
+        self.witness = witness
 
         # begin populating inner
         self.a = [0] * (1 << constraint_system.l_and)
@@ -28,11 +28,11 @@ class Prover:
 
         for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
             for j, op, s in I_a:
-                self.a[i] ^= op(witness.data[j], s)
+                self.a[i] ^= op(self.witness[j], s)
             for j, op, s in I_b:
-                self.b[i] ^= op(witness.data[j], s)
+                self.b[i] ^= op(self.witness[j], s)
             for j, op, s in I_c:
-                self.c[i] ^= op(witness.data[j], s)
+                self.c[i] ^= op(self.witness[j], s)
 
         assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
@@ -57,7 +57,7 @@ class Prover:
             result[i] = prefixes[i] * suffixes[i] * self.w[i]
         return result
 
-    def _directly_evaluate(self, r_zhat_prime: galois.FieldElement, r_x_prime: list[galois.FieldElement]):
+    def _directly_evaluate(self, r_zhat_prime, r_x_prime):
         # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
         # verifier can use the resulting things as the claims α_a, α_b, α_c to feed into the shift reduction
         # in practice, these values will probably "pop out" for free at the end of the prover's univariate skip.
@@ -86,9 +86,7 @@ class Prover:
 
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
-    def initiate_first_phase(
-        self, lambda_a: galois.FieldElement, lambda_b: galois.FieldElement, lambda_c: galois.FieldElement
-    ):
+    def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
         r_x_tensor = [field(1)] * (1 << self.constraint_system.l_and)
         for i in range(self.constraint_system.l_and):
             for j in range(1 << i):
@@ -163,24 +161,21 @@ class Prover:
                 w_y >>= 1
 
         m_lambda = [("a", lambda_a), ("b", lambda_b), ("c", lambda_c)]  # just to save some characters
-        l_tilde_suffixes = self.l_tilde[63] * 64
+        l_tilde_suffixes = [self.l_tilde[63]] * 64
         for i in range(1, 64):
             l_tilde_suffixes[i] = l_tilde_suffixes[i - 1] + self.l_tilde[64 - 1 - i]
         result = [[field(0)] * 64 for _ in range(64)]
         for j in range(64):
             for s in range(64 - j):  # not all s's will have nonzero h_sll(j, s)! only sum over the ones that do.
-                result[j][s] = self.l_tilde[j + s] * (
-                    sum(g[ShiftOp.SLL][m][j][s] * lambda_m for m, lambda_m in m_lambda),
-                    field(0),
+                result[j][s] = self.l_tilde[j + s] * sum(
+                    (g[ShiftOp.SLL][m][j][s] * lambda_m for m, lambda_m in m_lambda), field(0)
                 )
             for s in range(j + 1):  # not all s's will have nonzero h_srl(j, s)! only sum over the ones that do.
-                result[j][s] += self.l_tilde[j - s] * (
-                    sum(g[ShiftOp.SRL][m][j][s] * lambda_m for m, lambda_m in m_lambda),
-                    field(0),
+                result[j][s] += self.l_tilde[j - s] * sum(
+                    (g[ShiftOp.SRL][m][j][s] * lambda_m for m, lambda_m in m_lambda), field(0)
                 )
             for s in range(j + 1):
-                result[j][s] += (self.l_tilde[j - s] if j < 63 else l_tilde_suffixes[i]) * (  # last row special
-                    sum(g[ShiftOp.SRA][m][j][s] * lambda_m for m, lambda_m in m_lambda),
-                    field(0),
+                result[j][s] += (self.l_tilde[j - s] if j < 63 else l_tilde_suffixes[i]) * sum(  # last row special
+                    (g[ShiftOp.SRA][m][j][s] * lambda_m for m, lambda_m in m_lambda), field(0)
                 )
         # at this point, result[j][s] should be ready to (be flattened and) run sumcheck on.
