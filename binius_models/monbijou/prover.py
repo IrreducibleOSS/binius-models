@@ -150,22 +150,37 @@ class Prover:
                         for m in ["a", "b", "c"]:
                             for s in range(64):
                                 g[op][m][j][s] += M[op][m][s][y]
+                                # NOTE: some of the `M[op][m][s][y]`s will be zero. in fact, will be zero if and only if
+                                # no shifted value indices in M_{op, m}[s] hit the yth component of the witness---
+                                # i.e., the sᵗʰ column of M_{op, m} is empty. in fact, this will happen most of the time
+                                # it could be worthwhile to precompute a sparse representation, i.e., a mapping sending
+                                # y ↦ {(op, m, s) | ∃ x : M_{op, m}(x, y, s) ≠ 0}, and then replace all 3 inner loops.
+                                # this is very roughly a column-oriented sparse representation of the constraint system,
+                                # as opposed to the row-oriented representation we're used to.
+                                # very heuristically, this could reduce the cost of this step by 64x (or even 9x that?),
+                                # i.e., assuming that each witness word only turns up in one or two constraints.
+                                # otoh, additions are pretty cheap. but the savings here could be significant. revisit.
                 w_y >>= 1
 
-        # THE BELOW IS NOT DONE AND NEEDS TO BE FIXED
+        m_lambda = [("a", lambda_a), ("b", lambda_b), ("c", lambda_c)]  # just to save some characters
+        l_tilde_suffixes = self.l_tilde[63] * 64
+        for i in range(1, 64):
+            l_tilde_suffixes[i] = l_tilde_suffixes[i - 1] + self.l_tilde[64 - 1 - i]
         result = [[field(0)] * 64 for _ in range(64)]
         for j in range(64):
-            # begin contribution of sll to result[j][s]
             for s in range(64 - j):  # not all s's will have nonzero h_sll(j, s)! only sum over the ones that do.
-                g_sll_sum = field(0)
-                for m, lambda_m in [(self.a, lambda_a), (self.b, lambda_b), (self.c, lambda_c)]:
-                    g_sll_sum += lambda_m * field(0)
-
-                result[j][s] = g_sll_sum * self.l_tilde[j + s]  # h_sll(j, s) = L̃(r'_ẑ, j + s)
-            # begin contribution of srl to result[j][s]
+                result[j][s] = self.l_tilde[j + s] * (
+                    sum(g[ShiftOp.SLL][m][j][s] * lambda_m for m, lambda_m in m_lambda),
+                    field(0),
+                )
             for s in range(j + 1):  # not all s's will have nonzero h_srl(j, s)! only sum over the ones that do.
-                g_srl_sum = field(0)
-                for m, lambda_m in [(self.a, lambda_a), (self.b, lambda_b), (self.c, lambda_c)]:
-                    g_srl_sum += lambda_m * field(0)
-
-                result[j][s] += g_srl_sum * self.l_tilde[j - s]
+                result[j][s] += self.l_tilde[j - s] * (
+                    sum(g[ShiftOp.SRL][m][j][s] * lambda_m for m, lambda_m in m_lambda),
+                    field(0),
+                )
+            for s in range(j + 1):
+                result[j][s] += (self.l_tilde[j - s] if j < 63 else l_tilde_suffixes[i]) * (  # last row special
+                    sum(g[ShiftOp.SRA][m][j][s] * lambda_m for m, lambda_m in m_lambda),
+                    field(0),
+                )
+        # at this point, result[j][s] should be ready to (be flattened and) run sumcheck on.

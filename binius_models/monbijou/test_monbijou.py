@@ -5,7 +5,7 @@ from .field import field
 from .prover import Prover
 from .verifier import Verifier
 
-constraint_system = ConstraintSystem(
+constraint_system = ConstraintSystem(  # a mock constraint system, hardcoded for now
     l_and=3,
     l_words=6,
     and_constraints=[
