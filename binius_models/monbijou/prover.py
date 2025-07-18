@@ -56,7 +56,7 @@ class Prover(Generic[F]):
                 if j == i:
                     continue
                 product *= self.field(i ^ j)
-            self.w.append(product**-1)
+            self.w.append(product.inverse())
 
     def _l_tilde(self, r_zhat_prime):
         # computes the list L̃(r'_ẑ, i), for i ∈ {0, … , 63}. the standard barycentric approach is to realize that,
