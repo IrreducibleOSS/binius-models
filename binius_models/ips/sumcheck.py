@@ -2,12 +2,7 @@ import math
 from typing import Generic, TypeVar
 
 from binius_models.finite_fields.tower import BinaryTowerFieldElem
-from binius_models.ips.utils import (
-    Elem128b,
-    Polynomial,
-    compute_switchover,
-    linearly_interpolate,
-)
+from binius_models.ips.utils import Polynomial, compute_switchover, linearly_interpolate
 
 from ..utils.utils import is_power_of_two
 
