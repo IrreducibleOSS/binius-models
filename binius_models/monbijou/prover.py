@@ -26,13 +26,28 @@ class Prover:
         self.b = [0] * (1 << constraint_system.l_and)
         self.c = [0] * (1 << constraint_system.l_and)
 
+        # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index"
+        # the a, b, c are just as in the paper, and are computed in the same way as there (by shifting and accumulating)
+        # the column index is an auxiliary data structure which will be used to speed up the sumcheck's first phase.
+        # the point is to store, for each value y ∈ {0, … , n_{words} – 1} indexing into the witness,
+        # the set of (op, m, s)s for which the yᵗʰ column of the matrix M_{op, m}(X, y, s) is not identically zero.
+        # these will be exactly the (op, m, s) for which the prover needs to update the "gacc" accumulator; see below.
+
+        # btw, our use of sets is necessary. to see this, take the case that M_{op, m}(X, y, s) has 2 nonzero entries.
+        # in this case, M[op][m][s][y] below will be the sum of exactly two entries of the tensor of r'ₓ.
+        # i.e., the fact of two entries being present in that column will be accounted for during the computation of M.
+        # next, for each j for which w(j, s) = 1, we only want to add M[op][m][s][y] once to g[op][m][j][s], not twice.
+        self.column_index = [set() for _ in range(1 << constraint_system.l_words)]
         for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
             for j, op, s in I_a:
                 self.a[i] ^= op(self.witness[j], s)
+                self.column_index[j].add((op, "a", s))
             for j, op, s in I_b:
                 self.b[i] ^= op(self.witness[j], s)
+                self.column_index[j].add((op, "b", s))
             for j, op, s in I_c:
                 self.c[i] ^= op(self.witness[j], s)
+                self.column_index[j].add((op, "c", s))
 
         assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
@@ -144,20 +159,8 @@ class Prover:
             for j in range(64):
                 # todo: there is a bitwise / simd-ish vibe here; revisit whether there is some clever memory stuff
                 if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
-                    for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]:
-                        for m in ["a", "b", "c"]:
-                            for s in range(64):
-                                g[op][m][j][s] += M[op][m][s][y]
-                                # NOTE: some of the `M[op][m][s][y]`s will be zero. in fact, will be zero if and only if
-                                # no shifted value indices in M_{op, m}[s] hit the yth component of the witness---
-                                # i.e., the sᵗʰ column of M_{op, m} is empty. in fact, this will happen most of the time
-                                # it could be worthwhile to precompute a sparse representation, i.e., a mapping sending
-                                # y ↦ {(op, m, s) | ∃ x : M_{op, m}(x, y, s) ≠ 0}, and then replace all 3 inner loops.
-                                # this is very roughly a column-oriented sparse representation of the constraint system,
-                                # as opposed to the row-oriented representation we're used to.
-                                # very heuristically, this could reduce the cost of this step by 64x (or even 9x that?),
-                                # i.e., assuming that each witness word only turns up in one or two constraints.
-                                # otoh, additions are pretty cheap. but the savings here could be significant. revisit.
+                    for op, m, s in self.column_index[y]:
+                        g[op][m][j][s] += M[op][m][s][y]
                 w_y >>= 1
 
         m_lambda = [("a", lambda_a), ("b", lambda_b), ("c", lambda_c)]  # just to save some characters
