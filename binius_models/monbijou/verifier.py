@@ -1,10 +1,14 @@
+from typing import Generic, TypeVar
+
+from ..finite_fields.finite_field import FiniteFieldElem
 from .constraint_system import ConstraintSystem
-from .field import field
+
+F = TypeVar("F", bound=FiniteFieldElem)
 from .prover import Prover
 
 
-class Verifier:
-    def __init__(self, constraint_system: ConstraintSystem, prover: Prover):
+class Verifier(Generic[F]):
+    def __init__(self, constraint_system: ConstraintSystem, prover: Prover[F]):
         self.constraint_system = constraint_system
         self.prover = prover
 

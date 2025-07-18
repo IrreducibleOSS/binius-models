@@ -1,16 +1,20 @@
 import math
+from typing import Generic, TypeVar
 
+from binius_models.finite_fields.tower import BinaryTowerFieldElem
 from binius_models.ips.utils import (
     Elem128b,
-    Polynomial128,
+    Polynomial,
     compute_switchover,
     linearly_interpolate,
 )
 
 from ..utils.utils import is_power_of_two
 
+F = TypeVar("F", bound=BinaryTowerFieldElem)
 
-class Sumcheck:
+
+class Sumcheck(Generic[F]):
     """
     multilinears: a list of _multilinear_ polynomials, of equal sizes.
 
@@ -21,9 +25,7 @@ class Sumcheck:
     each is given as a list of coefficients in the Lagrange basis, where these coefficients are 𝔽₂-elements
     """
 
-    def __init__(
-        self, multilinears: list[list[Elem128b]], composition: Polynomial128, high_to_low: bool = False
-    ) -> None:
+    def __init__(self, multilinears: list[list[F]], composition: Polynomial[F], high_to_low: bool = False) -> None:
         length = len(multilinears[0])
         assert is_power_of_two(length)
         assert all(len(multilinear) == length for multilinear in multilinears)  # multilinears are of equal lengths
@@ -33,7 +35,8 @@ class Sumcheck:
         self.composition = composition
         self.round = 0
         self.switchover = compute_switchover(self.v, composition.degree, 100)
-        self.tensor = [Elem128b.one()] + [Elem128b.zero()] * ((1 << self.switchover) - 1)
+        self.field = type(multilinears[0][0])
+        self.tensor = [self.field.one()] + [self.field.zero()] * ((1 << self.switchover) - 1)
         self._precompute_barycentric_weights()
         self.high_to_low = high_to_low
 
@@ -42,21 +45,21 @@ class Sumcheck:
         # will only be used by the verifier, to extrapolate
         self.w = []  # the degree of the polynomial we will need to extrapolate will be composition.degree.
         for i in range(self.composition.degree + 1):
-            product = Elem128b.one()
+            product = self.field.one()
             for j in range(self.composition.degree + 1):
                 if j == i:
                     continue
-                product *= Elem128b(i ^ j)
+                product *= self.field(i ^ j)
             self.w.append(product.inverse())
 
-    def compute_round_polynomial(self) -> list[Elem128b]:
+    def compute_round_polynomial(self) -> list[F]:
         # computes the first half of the round: everything up until the round polynomial is sent to the verifier.
         # returns the list of evaluations of {g_{self.round}(k)) at the points [1, ..., d]; length is d
         assert self.round in range(self.v)
 
-        evaluations = [Elem128b.zero()] * self.composition.degree  # vector of evals; omit evaluation at 0.
+        evaluations = [self.field.zero()] * self.composition.degree  # vector of evals; omit evaluation at 0.
         round_v = self.v - self.round
-        folds = [[Elem128b.zero() for _ in range(1 << round_v)] for _ in range(self.composition.variables)]
+        folds = [[self.field.zero() for _ in range(1 << round_v)] for _ in range(self.composition.variables)]
 
         for i in range(1 << round_v - 1):
             for j in range(self.composition.variables):
@@ -72,7 +75,7 @@ class Sumcheck:
                                     * self.multilinears[j][h << round_v | idx]
                                     for h in range(1 << self.round)
                                 ),
-                                Elem128b.zero(),  # NOTE: this whole thing above is a base * extension dot product.
+                                self.field.zero(),  # NOTE: this whole thing above is a base * extension dot product.
                             )
                         else:
                             folds[j][idx] = sum(
@@ -80,7 +83,7 @@ class Sumcheck:
                                     self.tensor[h] * self.multilinears[j][idx << self.round | h]
                                     for h in range(1 << self.round)
                                 ),
-                                Elem128b.zero(),  # NOTE: this whole thing above is a base * extension dot product.
+                                self.field.zero(),  # NOTE: this whole thing above is a base * extension dot product.
                             )
                     # which indices into self.multilinears[j] do we care about? the index we want is as follows:
                     # [ _____i (v - 1 - self.round bits)_____  ||  _k (1 bit)_  ||  _____h (self.round bits)_____ ]
@@ -96,8 +99,8 @@ class Sumcheck:
                 arguments = [[folds[j][i << 1 | k] for j in range(self.composition.variables)] for k in range(2)]
             evaluations[0] += self.composition.evaluate(arguments[1])
             for k in range(2, self.composition.degree + 1):
-                argument = [  # note: each Elem128b(k) below will live in a small field! implement it as such.
-                    linearly_interpolate((arguments[0][j], arguments[1][j]), Elem128b(k))
+                argument = [  # note: each self.field(k) below will live in a small field! implement it as such.
+                    linearly_interpolate((arguments[0][j], arguments[1][j]), self.field(k))
                     for j in range(self.composition.variables)
                 ]
                 evaluations[k - 1] += self.composition.evaluate(argument)
@@ -106,7 +109,7 @@ class Sumcheck:
             self.multilinears = folds
         return evaluations
 
-    def receive_challenge(self, r: Elem128b) -> None:
+    def receive_challenge(self, r: F) -> None:
         round_v = self.v - self.round
         if self.round < self.switchover:  # expand tensor
             if self.high_to_low:
@@ -135,26 +138,26 @@ class Sumcheck:
                     ]
         self.round += 1
 
-    def interpolate(self, evaluations: list[Elem128b], point: Elem128b) -> Elem128b:
+    def interpolate(self, evaluations: list[F], point: F) -> F:
         # interpreting "evaluations" as the evals of an unknown polynomial of degree ≤ d at the points (0, ..., d),
         # returns the evaluation of said polynomial at `point`. uses barycentric extrapolation.
         # variant w/o division: ref: https://gitlab.com/ulvetanna/frobenius/-/blob/main/src/polynomial/univariate.rs
         assert len(evaluations) == self.composition.degree + 1
 
-        terms_partial_prod = Elem128b.one()
-        result = Elem128b.zero()
+        terms_partial_prod = self.field.one()
+        result = self.field.zero()
         for i in range(self.composition.degree + 1):
-            term = point + Elem128b(i)
+            term = point + self.field(i)
             result *= term
             result += evaluations[i] * self.w[i] * terms_partial_prod
             terms_partial_prod *= term
         return result
 
-    def query(self) -> Elem128b:
+    def query(self) -> F:
         assert self.round == self.v
         return self.composition.evaluate([multilinear[0] for multilinear in self.multilinears])
 
-    def sum(self) -> Elem128b:
+    def sum(self) -> F:
         # helper method: returns the actual statement that we're proving;
         # namely, it's the actual sum of g over the entire cube.
         return sum(
@@ -162,5 +165,5 @@ class Sumcheck:
                 self.composition.evaluate([multilinear[h] for multilinear in self.multilinears])
                 for h in range(1 << self.v)
             ),
-            Elem128b.zero(),
+            self.field.zero(),
         )

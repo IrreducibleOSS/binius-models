@@ -1,6 +1,9 @@
 import copy
+from typing import Generic, TypeVar
 
 from ..finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
+
+F = TypeVar("F", bound=BinaryTowerFieldElem)
 
 
 class Elem1b(BinaryTowerFieldElem):
@@ -49,12 +52,12 @@ def compute_switchover(v: int, d: int, ratio: int) -> int:
 
 
 # Corresponds to `binius_core::polynomial::extrapolate_line()`.
-def linearly_interpolate(points: tuple[Elem128b, Elem128b], r: Elem128b) -> Elem128b:
+def linearly_interpolate(points: tuple[F, F], r: F) -> F:
     return points[0] + (points[1] - points[0]) * r
 
 
-class Polynomial128:
-    def __init__(self, variables: int, data: dict[tuple[int, ...], Elem128b]) -> None:
+class Polynomial(Generic[F]):
+    def __init__(self, variables: int, data: dict[tuple[int, ...], F]) -> None:
         self.variables = variables
         self.degree = 0  # `degree` refers to the _total degree_ (!) of the multivariate polynomial.
         for multidegree, coefficient in data.items():
@@ -64,11 +67,11 @@ class Polynomial128:
             self.degree = max(self.degree, sum(multidegree))
         self.data = data
 
-    def evaluate(self, argument: list[Elem128b]) -> Elem128b:
+    def evaluate(self, argument: list[F]) -> F:
         assert len(argument) == self.variables, f"arguments: {len(argument)}, variables: {self.variables}"
-        result = Elem128b.zero()
+        result = type(argument[0]).zero()
         for multidegree, coefficient in self.data.items():
-            monomial = Elem128b.one()
+            monomial = type(argument[0]).one()
             for i, degree in enumerate(multidegree):
                 monomial *= argument[i] ** degree
             result += coefficient * monomial
