@@ -1,7 +1,6 @@
 from ..ips.sumcheck import Sumcheck
-from ..ips.utils import Polynomial128
 from .constraint_system import ConstraintSystem, ShiftOp
-from .field import field
+from .field import MultivariatePolynomial, field
 
 
 class Prover:
@@ -198,14 +197,14 @@ class Prover:
         # note that we are doing our sumcheck in such a way that s is less-significant and j is more-significant.
         # j is the outer (row) index; s is the inner (column) index. summing all rows is concat in row-major order.
         multilinears = [
-            sum(h[ShiftOp.SLL]["a"], []),
+            sum(h[ShiftOp.SLL], []),
             sum(g[ShiftOp.SLL]["a"], []),
-            sum(h[ShiftOp.SRL]["a"], []),
+            sum(h[ShiftOp.SRL], []),
             sum(g[ShiftOp.SRL]["a"], []),
-            sum(h[ShiftOp.SRA]["a"], []),
+            sum(h[ShiftOp.SRA], []),
             sum(g[ShiftOp.SRA]["a"], []),
         ]
-        composition = Polynomial128(  # ∑ₒₚ hₒₚ ⋅ gₒₚ
+        composition = MultivariatePolynomial(  # ∑ₒₚ hₒₚ ⋅ gₒₚ
             6, {(1, 1, 0, 0, 0, 0): field(1), (0, 0, 1, 1, 0, 0): field(1), (0, 0, 0, 0, 1, 1): field(1)}
         )
         self.first_phase_sumcheck = Sumcheck(multilinears, composition)
