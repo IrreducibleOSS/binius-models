@@ -14,37 +14,37 @@ constraint_system = ConstraintSystem(  # a mock constraint system, hardcoded for
             [(10, ShiftOp.SLL, 55)],
             [(63, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING ^ SOMETHING = SOMETHING. this imposes no real condition
+        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
             [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],

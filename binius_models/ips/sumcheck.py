@@ -28,6 +28,9 @@ class Sumcheck(Generic[F]):
         self.v = int(math.log2(length))
         self.multilinears = multilinears
         self.composition = composition
+        self.challenges: list[F] = []
+        # you can get surprisingly far without memoizing these. it turns out they wind up being useful in some cases.
+        # e.g., in fribinius, etc., we need them. go ahead and memoize them here, for use by consuming applications.
         self.round = 0
         self.switchover = compute_switchover(self.v, composition.degree, 100)
         self.field = type(multilinears[0][0])
@@ -105,6 +108,7 @@ class Sumcheck(Generic[F]):
         return evaluations
 
     def receive_challenge(self, r: F) -> None:
+        self.challenges.append(r)
         round_v = self.v - self.round
         if self.round < self.switchover:  # expand tensor
             if self.high_to_low:
