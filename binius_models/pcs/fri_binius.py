@@ -24,7 +24,6 @@ class FRIBinius:  # (Generic[F])
         self.field = field
         self.high_to_low = high_to_low
         self.additive_ntt = AdditiveNTT[Elem128b](field, self.var, log_inv_rate, high_to_low=self.high_to_low)
-        self.challenges: list[Elem128b] = []  # memoize the round challenges we receive from the verifier...
         self.oracle = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
 
@@ -72,7 +71,6 @@ class FRIBinius:  # (Generic[F])
         return self.sumcheck.compute_round_polynomial()
 
     def receive_challenge(self, r: Elem128b) -> None:
-        self.challenges.append(r)
         i = self.sumcheck.round
         next_round_oracle = [Elem128b.zero()] * (1 << self.var + self.log_inv_rate - i - 1)
         for u in range(1 << self.var + self.log_inv_rate - i - 1):  # hasn't +='d round yet
@@ -123,5 +121,5 @@ class FRIBinius:  # (Generic[F])
             else:
                 v >>= 1  # shift out lowest bit
                 twiddle = self._get_preimage(i, v)
-            c = self._fold(twiddle, values, self.challenges[i])
+            c = self._fold(twiddle, values, self.sumcheck.challenges[i])
         assert c == result

@@ -19,20 +19,20 @@ class Verifier(Generic[F]):
 
         claim = lambda_a * alpha_a + lambda_b * alpha_b + lambda_c * alpha_c
 
-        # begin first phase of sumcheck
-        r_s = []
-        for _ in range(6):
+        # first phase of sumcheck
+        for _ in range(12):
             evaluations = self.prover.first_phase_sumcheck.compute_round_polynomial()
             evaluations.insert(0, evaluations[0] + claim)
             challenge = self.field.random()
             self.prover.first_phase_sumcheck.receive_challenge(challenge)
             claim = self.prover.first_phase_sumcheck.interpolate(evaluations, challenge)
-            r_s.append(challenge)
-        r_j = []
-        for _ in range(6):
-            evaluations = self.prover.first_phase_sumcheck.compute_round_polynomial()
+        r_s, r_j = self.prover.first_phase_sumcheck.challenges[:6], self.prover.first_phase_sumcheck.challenges[6:]
+
+        self.prover.initiate_second_phase()
+        for _ in range(self.constraint_system.l_words):
+            evaluations = self.prover.second_phase_sumcheck.compute_round_polynomial()
             evaluations.insert(0, evaluations[0] + claim)
             challenge = self.field.random()
-            self.prover.first_phase_sumcheck.receive_challenge(challenge)
-            claim = self.prover.first_phase_sumcheck.interpolate(evaluations, challenge)
-            r_j.append(challenge)
+            self.prover.second_phase_sumcheck.receive_challenge(challenge)
+            claim = self.prover.second_phase_sumcheck.interpolate(evaluations, challenge)
+        r_y = self.prover.second_phase_sumcheck.challenges[:]

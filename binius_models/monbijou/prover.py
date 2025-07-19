@@ -106,7 +106,20 @@ class Prover(Generic[F]):
 
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
+    def _tensor_expand(self, x: list[F], vars: int) -> list[F]:
+        result = [self.field.one()] * (1 << vars)
+        for i in range(vars):
+            for j in range(1 << i):
+                result[1 << i | j] = result[j] * x[i]
+                result[j] -= result[1 << i | j]
+        return result
+
     def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
+        self.lambda_m = {  # will use these in second phase
+            "a": lambda_a,
+            "b": lambda_b,
+            "c": lambda_c,
+        }
         h = {
             ShiftOp.SLL: [],
             ShiftOp.SRL: [],
@@ -119,17 +132,13 @@ class Prover(Generic[F]):
         for s in range(1, 64):
             h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
 
-        r_x_tensor = [self.field.one()] * (1 << self.constraint_system.l_and)
-        for i in range(self.constraint_system.l_and):
-            for j in range(1 << i):
-                r_x_tensor[1 << i | j] = r_x_tensor[j] * self.r_x_prime[i]
-                r_x_tensor[j] -= r_x_tensor[1 << i | j]
+        r_x_tensor = self._tensor_expand(self.r_x_prime, self.constraint_system.l_and)
         # for each op × m × s, M[op][m][s] is Mₒₚ(r'ₓ, Y, s), the partial specialization of Mₒₚ(X, Y, s) at r'ₓ.
         # this looks like taking the Mₒₚ(X, Y, s) matrix, which is n_{and} × n_{word}, and folding it by ⊗(r'ₓ).
         # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
         # the result is a length-n_{words} row-vector; moreover, we have a such thing for each op × m × s.
         # since Mₒₚ(X, Y, s) is sparse + binary, we can get this by allocating n_{words} and iterating through the 1s.
-        M = {  # outer index s; inner index y
+        self.M = {  # store these. will reuse them in the second phase
             ShiftOp.SLL: {
                 "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
                 "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
@@ -145,14 +154,14 @@ class Prover(Generic[F]):
                 "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
                 "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
             },
-        }
+        }  # outer index s; inner index y
         for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
             for y, op, s in I_a:
-                M[op]["a"][s][y] += r_x_tensor[x]
+                self.M[op]["a"][s][y] += r_x_tensor[x]
             for y, op, s in I_b:
-                M[op]["b"][s][y] += r_x_tensor[x]
+                self.M[op]["b"][s][y] += r_x_tensor[x]
             for y, op, s in I_c:
-                M[op]["c"][s][y] += r_x_tensor[x]
+                self.M[op]["c"][s][y] += r_x_tensor[x]
 
         g = {  # outer index j, inner index s
             ShiftOp.SLL: {
@@ -177,7 +186,7 @@ class Prover(Generic[F]):
                 # todo: there is a bitwise / simd-ish vibe here; revisit whether there is some clever memory stuff
                 if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
                     for op, m, s in self.column_index[y]:
-                        g[op][m][j][s] += M[op][m][s][y]
+                        g[op][m][j][s] += self.M[op][m][s][y]
                         # the alternative is to simply loop over all op, m, and s, and do the above line for every one.
                         # that would be perfectly correct, since when `self.column_index[y] = []`, M[op][m][s][y] = 0.
                         # it would also be more of a regular computation (simd stuff possible? not sure.).
@@ -188,17 +197,17 @@ class Prover(Generic[F]):
         # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
         for j in range(64):
             for s in range(64):
-                g[ShiftOp.SLL]["a"][j][s] *= lambda_a
-                g[ShiftOp.SLL]["a"][j][s] += lambda_b * g[ShiftOp.SLL]["b"][j][s]
-                g[ShiftOp.SLL]["a"][j][s] += lambda_c * g[ShiftOp.SLL]["c"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] *= self.lambda_m["a"]
+                g[ShiftOp.SLL]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SLL]["b"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SLL]["c"][j][s]
 
-                g[ShiftOp.SRL]["a"][j][s] *= lambda_a
-                g[ShiftOp.SRL]["a"][j][s] += lambda_b * g[ShiftOp.SRL]["b"][j][s]
-                g[ShiftOp.SRL]["a"][j][s] += lambda_c * g[ShiftOp.SRL]["c"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] *= self.lambda_m["a"]
+                g[ShiftOp.SRL]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SRL]["b"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SRL]["c"][j][s]
 
-                g[ShiftOp.SRA]["a"][j][s] *= lambda_a
-                g[ShiftOp.SRA]["a"][j][s] += lambda_b * g[ShiftOp.SRA]["b"][j][s]
-                g[ShiftOp.SRA]["a"][j][s] += lambda_c * g[ShiftOp.SRA]["c"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] *= self.lambda_m["a"]
+                g[ShiftOp.SRA]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SRA]["b"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SRA]["c"][j][s]
 
         # NOW going to flatten all 3 h's and all 3 (summed) g's. this is purely a matter of memory layout.
         # in a real implementation, we should probably arrange things so that they start and stay flat the whole time,
@@ -223,3 +232,41 @@ class Prover(Generic[F]):
             },
         )
         self.first_phase_sumcheck = Sumcheck(multilinears, composition)
+
+    def initiate_second_phase(self):
+        r_s, r_j = self.first_phase_sumcheck.challenges[:6], self.first_phase_sumcheck.challenges[6:]
+        r_j_tensor = self._tensor_expand(r_j, 6)
+        w_r_j = [
+            sum(
+                (r_j_tensor[j] if self.witness[y] >> j & 1 else self.field.zero() for j in range(64)), self.field.zero()
+            )
+            for y in range(1 << self.constraint_system.l_words)
+        ]
+
+        # begin computing second multilinear of second phase of sumcheck. see note.
+        # there are a lot of implementation choices here. various ways to proceed.
+        # should we keep the respective vectors M̃ₘ,ₒₚ(r'ₓ, Y, rₛ) (for Y varying)---for all 9 (m, op)---separate,
+        # and run separate sumchecks on them, batching the round polynomials out of the hot loop by λₘ and hₒₚ(rⱼ, rₛ)?
+        # should we do some intermediate thing, where we pre-consolidate ∑ₘ λₘ ⋅ M̃ₘ,ₒₚ(r'ₓ, Y, rₛ), for each op,
+        # and then batch the resulting three things using the coefficients hₒₚ(rⱼ, rₛ) outside of the hot loop?
+        # my sense is to go full bore and combine all 9 things into a single table of n_words values, before proceeding.
+        # the rough heuristic is that the M̃ₘ,ₒₚ(r'ₓ, Y, rₛ)s are fairly sparse: for each y, M̃ₘ,ₒₚ(r'ₓ, Y, rₛ) ≠ 0 iff
+        # w[y] appears in some constraint for (m, op) (for SOME constraint index x and SOME shift amount s).
+        # heuristically, this will only hold for let's say 1 out of the 9 possible (m, op)s. thus we can batch all 9
+        # of these things into 1, in such a way that exploits sparsity---since the sumcheck algorithm sure-as-hell won't
+
+        h_op_r_j_r_s = {
+            ShiftOp.SLL: self.first_phase_sumcheck.multilinears[0][0],
+            ShiftOp.SRL: self.first_phase_sumcheck.multilinears[2][0],
+            ShiftOp.SRA: self.first_phase_sumcheck.multilinears[4][0],
+        }
+
+        r_s_tensor = self._tensor_expand(r_s, 6)
+        M = [self.field.zero()] * (1 << self.constraint_system.l_words)
+        for y in range(1 << self.constraint_system.l_words):
+            for op, m, s in self.column_index[y]:
+                M[y] += h_op_r_j_r_s[op] * self.lambda_m[m] * r_s_tensor[s] * self.M[op][m][s][y]
+
+        multilinears = [w_r_j, M]
+        composition = Polynomial(2, {(1, 1): self.field.one()})
+        self.second_phase_sumcheck = Sumcheck(multilinears, composition)
