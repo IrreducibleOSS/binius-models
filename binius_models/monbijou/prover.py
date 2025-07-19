@@ -64,7 +64,7 @@ class Prover(Generic[F]):
         # and then finish the job using n mults and n divisions. total n - 1 + 2 ⋅ n == 3 ⋅ n - 1 mults and n inversions
 
         # we are going to be slightly cleverer. for each i, we want the all-but-one product p[i] ≔ ∏_{j ≠ i} (r'_ẑ – j)
-        # if we have those, we can finish the job w/ no further mults, by setting L̃(r'_ẑ, i) ≔ p[i] ⋅ w[i] for each i.
+        # if we have those, we can finish the job w/ n further mults, by setting L̃(r'_ẑ, i) ≔ p[i] ⋅ w[i] for each i.
         # we can get the all-but-one products with 2 ⋅ n space overhead by precomputing the prefix and suffix products
         # when all is said and done, we get 2 ⋅ (n – 1) + 2 ⋅ n = 4 ⋅ n - 2 mults, so we replaced invs --> mults
         # the problem size is small---but see later whether we end up needing this in any "hot" parts of the code?
@@ -178,6 +178,11 @@ class Prover(Generic[F]):
                 if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
                     for op, m, s in self.column_index[y]:
                         g[op][m][j][s] += M[op][m][s][y]
+                        # the alternative is to simply loop over all op, m, and s, and do the above line for every one.
+                        # that would be perfectly correct, since when `self.column_index[y] = []`, M[op][m][s][y] = 0.
+                        # it would also be more of a regular computation (simd stuff possible? not sure.).
+                        # but all signs point to that being a massive number of adds, enough to make it much slower.
+                        # heuristically (depending on the constraint system), this should save on adds by 64x at least.
                 w_y >>= 1
 
         # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
