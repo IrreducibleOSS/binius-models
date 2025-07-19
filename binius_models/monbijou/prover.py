@@ -1,0 +1,225 @@
+from typing import Generic, TypeVar
+
+from ..finite_fields.finite_field import FiniteFieldElem
+from ..ips.sumcheck import Sumcheck
+from ..ips.utils import Polynomial
+from .constraint_system import ConstraintSystem, ShiftOp
+
+F = TypeVar("F", bound=FiniteFieldElem)
+
+
+class Prover(Generic[F]):
+    def __init__(self, field: type[F], constraint_system: ConstraintSystem, witness: list[int]):
+        self.field = field
+        self.constraint_system = constraint_system
+        self.witness = witness
+        assert len(witness) == 1 << constraint_system.l_words
+        assert all(witness[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
+        assert 1 << constraint_system.l_and == len(constraint_system.and_constraints)
+
+        # begin computation of barycentric weight (!). indeed, just one weight, not many.
+        # it's a fact that when the interpolation domain is a power of 2, then all barycentric weights wind up identical
+        # if the domain is of size 2ᵏ, then for each i ∈ {0, … , 2ᵏ − 1}, { i ⊕ j | j ≠ i } == {1, … , 2ᵏ − 1} (!).
+        # indeed for each i, xor-with-i is a bijection on {0, … , 2ᵏ − 1} ≅ ℤ₂ᵏ. its image, \ {0}, is {1, … , 2ᵏ − 1}.
+        # it's enough to take the product of the elements of {1, … , 2ᵏ − 1}, and then invert that, to get our "weight".
+        w = self.field(1)
+        for i in range(1, 64):
+            w *= self.field(i)
+        self.w = w.inverse()
+
+        # begin populating inner
+        self.a = [0] * (1 << constraint_system.l_and)
+        self.b = [0] * (1 << constraint_system.l_and)
+        self.c = [0] * (1 << constraint_system.l_and)
+
+        # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index"
+        # the a, b, c are just as in the paper, and are computed in the same way as there (by shifting and accumulating)
+        # the column index is an auxiliary data structure which will be used to speed up the sumcheck's first phase.
+        # the point is to store, for each value y ∈ {0, … , n_{words} – 1} indexing into the witness,
+        # the set of (op, m, s)s for which the yᵗʰ column of the matrix M_{op, m}(X, y, s) is not identically zero.
+        # these will be exactly the (op, m, s) for which the prover needs to update the "gacc" accumulator; see below.
+
+        # btw, our use of sets is necessary. to see this, take the case that M_{op, m}(X, y, s) has 2 nonzero entries.
+        # in this case, M[op][m][s][y] below will be the sum of exactly two entries of the tensor of r'ₓ.
+        # i.e., the fact of two entries being present in that column will be accounted for during the computation of M.
+        # next, for each j for which w(j, s) = 1, we only want to add M[op][m][s][y] once to g[op][m][j][s], not twice.
+        self.column_index: list[set[int]] = [set() for _ in range(1 << constraint_system.l_words)]
+        for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
+            for j, op, s in I_a:
+                self.a[i] ^= op(self.witness[j], s)
+                self.column_index[j].add((op, "a", s))
+            for j, op, s in I_b:
+                self.b[i] ^= op(self.witness[j], s)
+                self.column_index[j].add((op, "b", s))
+            for j, op, s in I_c:
+                self.c[i] ^= op(self.witness[j], s)
+                self.column_index[j].add((op, "c", s))
+
+        assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
+
+    def _l_tilde(self, r_zhat_prime):
+        # computes the list L̃(r'_ẑ, i), for i ∈ {0, … , 63}. the standard barycentric approach is to realize that,
+        # for each i, L̃(r'_ẑ, i) == ∏ⱼ(r'_ẑ – j) ⋅ [ w[i] / (r'_ẑ – i) ], where w[i] are the barycentric weights.
+        # the left-hand product ∏ⱼ( r'_ẑ – j) doesn't depend on i, so we can compute it once, using n – 1 mults,
+        # and then finish the job using n mults and n divisions. total n - 1 + 2 ⋅ n == 3 ⋅ n - 1 mults and n inversions
+
+        # we are going to be slightly cleverer. for each i, we want the all-but-one product p[i] ≔ ∏_{j ≠ i} (r'_ẑ – j)
+        # if we have those, we can finish the job w/ n further mults, by setting L̃(r'_ẑ, i) ≔ p[i] ⋅ w[i] for each i.
+        # we can get the all-but-one products with 2 ⋅ n space overhead by precomputing the prefix and suffix products
+        # when all is said and done, we get 2 ⋅ (n – 1) + 2 ⋅ n = 4 ⋅ n - 2 mults, so we replaced invs --> mults
+        # the problem size is small---but see later whether we end up needing this in any "hot" parts of the code?
+        prefixes = [self.field.one()] * 64
+        suffixes = [self.field.one()] * 64
+        for i in range(1, 64):
+            prefixes[i] = prefixes[i - 1] * (r_zhat_prime - self.field(i - 1))
+            suffixes[64 - 1 - i] = suffixes[64 - i] * (r_zhat_prime - self.field(64 - i))
+        result = [self.field.zero()] * 64
+        for i in range(64):
+            result[i] = prefixes[i] * suffixes[i] * self.w  # these are all the same....! can you save?
+        return result
+
+    def _directly_evaluate(self, r_zhat_prime, r_x_prime):
+        # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
+        # verifier can use the resulting things as the claims α_a, α_b, α_c to feed into the shift reduction
+        # in practice, these values will probably "pop out" for free at the end of the prover's univariate skip.
+        # as for the verifier, my guess is that the prover will nondeterministically send them to the verifier,
+        # so that the verifier can wrap up the univariate skip. pending the correctness of the supplied values.
+        # the verifier will thus be done with univariate skip, and can turn his attention to the shift reduction.
+
+        # this method can be viewed as a stand-in for the prover's univariate skip, in terms of the state we're left in.
+        # will take this opportunity to memoize l_tilde ≔ L̃(r'_ẑ, i); the prover would compute this at the end of skip
+        assert len(r_x_prime) == self.constraint_system.l_and
+        self.l_tilde = self._l_tilde(r_zhat_prime)
+        self.r_x_prime = r_x_prime
+
+        def extrapolate_bitstring(value):
+            # interpreting `value` as the (bit-valued!) evaluations of some univariate polynomial over the domain D,
+            # returns that polynomial's value at r'_x. because we precomputed L̃(r'_ẑ, i), just now need a subset sum.
+            return sum((self.l_tilde[i] for i in range(64) if value >> i & 1), self.field.zero())
+
+        def evaluate(m):
+            univariate = [extrapolate_bitstring(m[i]) for i in range(1 << self.constraint_system.l_and)]  # specialize
+            for i in range(self.constraint_system.l_and):  # now fold
+                for j in range(1 << self.constraint_system.l_and - i - 1):
+                    univariate[j] = univariate[j << 1] + r_x_prime[i] * (univariate[j << 1 | 1] - univariate[j << 1])
+            return univariate[0]
+
+        return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
+
+    def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
+        h = {
+            ShiftOp.SLL: [],
+            ShiftOp.SRL: [],
+            ShiftOp.SRA: [],
+        }
+        for j in range(64):
+            h[ShiftOp.SLL].append(self.l_tilde[j:] + [self.field.zero()] * j)
+            h[ShiftOp.SRL].append(list(reversed(self.l_tilde[: j + 1])) + [self.field.zero()] * (64 - 1 - j))
+            h[ShiftOp.SRA].append(list(reversed(self.l_tilde[: j + 1])) + [self.field.zero()] * (64 - 1 - j))
+        for s in range(1, 64):
+            h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
+
+        r_x_tensor = [self.field.one()] * (1 << self.constraint_system.l_and)
+        for i in range(self.constraint_system.l_and):
+            for j in range(1 << i):
+                r_x_tensor[1 << i | j] = r_x_tensor[j] * self.r_x_prime[i]
+                r_x_tensor[j] -= r_x_tensor[1 << i | j]
+        # for each op × m × s, M[op][m][s] is Mₒₚ(r'ₓ, Y, s), the partial specialization of Mₒₚ(X, Y, s) at r'ₓ.
+        # this looks like taking the Mₒₚ(X, Y, s) matrix, which is n_{and} × n_{word}, and folding it by ⊗(r'ₓ).
+        # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
+        # the result is a length-n_{words} row-vector; moreover, we have a such thing for each op × m × s.
+        # since Mₒₚ(X, Y, s) is sparse + binary, we can get this by allocating n_{words} and iterating through the 1s.
+        M = {  # outer index s; inner index y
+            ShiftOp.SLL: {
+                "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+            },
+            ShiftOp.SRL: {
+                "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+            },
+            ShiftOp.SRA: {
+                "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+                "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
+            },
+        }
+        for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
+            for y, op, s in I_a:
+                M[op]["a"][s][y] += r_x_tensor[x]
+            for y, op, s in I_b:
+                M[op]["b"][s][y] += r_x_tensor[x]
+            for y, op, s in I_c:
+                M[op]["c"][s][y] += r_x_tensor[x]
+
+        g = {  # outer index j, inner index s
+            ShiftOp.SLL: {
+                "a": [[self.field.zero()] * 64 for _ in range(64)],
+                "b": [[self.field.zero()] * 64 for _ in range(64)],
+                "c": [[self.field.zero()] * 64 for _ in range(64)],
+            },
+            ShiftOp.SRL: {
+                "a": [[self.field.zero()] * 64 for _ in range(64)],
+                "b": [[self.field.zero()] * 64 for _ in range(64)],
+                "c": [[self.field.zero()] * 64 for _ in range(64)],
+            },
+            ShiftOp.SRA: {
+                "a": [[self.field.zero()] * 64 for _ in range(64)],
+                "b": [[self.field.zero()] * 64 for _ in range(64)],
+                "c": [[self.field.zero()] * 64 for _ in range(64)],
+            },
+        }
+        for y in range(1 << self.constraint_system.l_words):
+            w_y = self.witness[y]
+            for j in range(64):
+                # todo: there is a bitwise / simd-ish vibe here; revisit whether there is some clever memory stuff
+                if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
+                    for op, m, s in self.column_index[y]:
+                        g[op][m][j][s] += M[op][m][s][y]
+                        # the alternative is to simply loop over all op, m, and s, and do the above line for every one.
+                        # that would be perfectly correct, since when `self.column_index[y] = []`, M[op][m][s][y] = 0.
+                        # it would also be more of a regular computation (simd stuff possible? not sure.).
+                        # but all signs point to that being a massive number of adds, enough to make it much slower.
+                        # heuristically (depending on the constraint system), this should save on adds by 64x at least.
+                w_y >>= 1
+
+        # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
+        for j in range(64):
+            for s in range(64):
+                g[ShiftOp.SLL]["a"][j][s] *= lambda_a
+                g[ShiftOp.SLL]["a"][j][s] += lambda_b * g[ShiftOp.SLL]["b"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] += lambda_c * g[ShiftOp.SLL]["c"][j][s]
+
+                g[ShiftOp.SRL]["a"][j][s] *= lambda_a
+                g[ShiftOp.SRL]["a"][j][s] += lambda_b * g[ShiftOp.SRL]["b"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] += lambda_c * g[ShiftOp.SRL]["c"][j][s]
+
+                g[ShiftOp.SRA]["a"][j][s] *= lambda_a
+                g[ShiftOp.SRA]["a"][j][s] += lambda_b * g[ShiftOp.SRA]["b"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] += lambda_c * g[ShiftOp.SRA]["c"][j][s]
+
+        # NOW going to flatten all 3 h's and all 3 (summed) g's. this is purely a matter of memory layout.
+        # in a real implementation, we should probably arrange things so that they start and stay flat the whole time,
+        # i.e. as length-2¹² arrays the entire time. doing that would make the indexing above a bit more of a pain.
+        # i.e., everywhere you see [j][s], that would need to be replaced with j << 6 | s, etc. etc.
+        # note that we are doing our sumcheck in such a way that s is less-significant and j is more-significant.
+        # j is the outer (row) index; s is the inner (column) index. summing all rows is concat in row-major order.
+        multilinears = [
+            sum(h[ShiftOp.SLL], []),
+            sum(g[ShiftOp.SLL]["a"], []),
+            sum(h[ShiftOp.SRL], []),
+            sum(g[ShiftOp.SRL]["a"], []),
+            sum(h[ShiftOp.SRA], []),
+            sum(g[ShiftOp.SRA]["a"], []),
+        ]
+        composition = Polynomial(  # ∑ₒₚ hₒₚ ⋅ gₒₚ
+            6,
+            {
+                (1, 1, 0, 0, 0, 0): self.field.one(),
+                (0, 0, 1, 1, 0, 0): self.field.one(),
+                (0, 0, 0, 0, 1, 1): self.field.one(),
+            },
+        )
+        self.first_phase_sumcheck = Sumcheck(multilinears, composition)

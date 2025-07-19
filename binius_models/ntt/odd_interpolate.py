@@ -55,7 +55,7 @@ class InterpolateNonTwoPrimary(Generic[F]):
     def interpolate(self, evaluations: list[F]) -> list[F]:
         if len(evaluations) != self.d << self.ell:
             raise ValueError("Input evaluations must be of length d * 2^ell")
-        stash = sum(
+        stash: list[F] = sum(
             (
                 self.additive_ntt._inverse_transform(evaluations[coset << self.ell : coset + 1 << self.ell], coset)
                 for coset in range(self.d)

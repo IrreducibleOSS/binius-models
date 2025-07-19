@@ -1,7 +1,7 @@
 import random  # just to mock the verifier's queries; not cryptographically secure
 
 from ..ips.sumcheck import Sumcheck
-from ..ips.utils import Elem128b, Polynomial128
+from ..ips.utils import Elem128b, Polynomial
 from ..ntt.additive_ntt import AdditiveNTT
 
 
@@ -19,7 +19,7 @@ class VectorOracle:
 class SumcheckClaim:  # each ring-switching instance _outputs_ / reduces to one of these. two multilinears
     def __init__(self, multilinear: list[Elem128b], folded_eq_indicator: list[Elem128b], index: int) -> None:
         # assert len(multilinears[0]) == len(multilinears[1])  # will do so internally
-        composition = Polynomial128(2, {tuple([1, 1]): Elem128b.one()})  # simple product of two multilinears
+        composition = Polynomial(2, {tuple([1, 1]): Elem128b.one()})  # simple product of two multilinears
         self.sumcheck = Sumcheck([multilinear, folded_eq_indicator], composition, False)
         self.value = sum((a * eq for (a, eq) in zip(multilinear, folded_eq_indicator)), Elem128b.zero())
         # presumably in real life we will have this value sitting around somewhere, as opposed to having to compute it.

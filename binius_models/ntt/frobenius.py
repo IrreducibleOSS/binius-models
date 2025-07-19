@@ -1,5 +1,5 @@
 from math import ceil, log2
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from ..finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
 from ..utils.utils import is_bit_set, is_power_of_two
@@ -65,8 +65,8 @@ class FrobeniusNTT:
 
     def _encode_helper(
         self,
-        input: list[Elem1bFP],
-        output: list[Elem1bFP],
+        input: list[Any],  # Tower level varies by recursion depth
+        output: list[Elem1bFP],  # Always 1-bit output
         l: int,
         coefficient_level: int,
         alpha_idx: int,
@@ -102,13 +102,10 @@ class FrobeniusNTT:
         )
 
         early_round = l > self.log_h
+        # below, `alpha_level` ≥ `coefficient_level`. the upcast is a no-op except when this is strict.
+        # i believe that the difference can be at most one, but i can't remember exactly (wouldn't be too hard to check)
+        input = [element.upcast(levels[alpha_level]) for element in input]
         folded = [input[i] if early_round else input[i] + twiddle * input[1 << l - 1 | i] for i in range(1 << l - 1)]
-        # the python model is a bit quirky on this; it will allow us to multiply big * small and also add small + big.
-        # the output of each binop will inherit the field of the first operand. thus it'll be `coefficient_field`.
-        # of course this will be wrong whenever `alpha_level > coefficient_level`. thus we perform the upcast below.
-        # i have delayed this upcast just for illustration---so that you can see that these are small × larges.
-        # in general, we have `alpha_level` ≥ `coefficient_level`; the below will be a no-op except when this is strict.
-        folded = [element.upcast(levels[alpha_level]) for element in folded]
 
         self._encode_helper(
             folded,
@@ -143,13 +140,13 @@ class FrobeniusNTT:
         self._encode_helper(input, output, self.log_h + self.log_inv_rate, 0, 0, 0, 0, 0)
         return output
 
-    def unpack_output(self, output: list[Elem1bFP]) -> Elem128bFP:  # <---- bigger than necessary
+    def unpack_output(self, output: list[Elem1bFP]) -> list[Any]:  # Mixed tower levels
         # `output` is the condensed, raw bit-output of the Frobenius NTT.
         # `index`: an log_h + log_inv_rate-bit integer, index of the desired output element we want to conjure.
         initial_dimension = self.log_h + self.log_inv_rate
         indeterminates_needed = ceil(log2(initial_dimension))
 
-        unpacked = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
+        unpacked: list[Any] = [Elem1bFP.zero()] * (1 << self.log_h + self.log_inv_rate)
         unpacked[0] = output[0]  # kill the 0 case right away, which is degenerate
         unpacked[1] = output[1]
         # for reasons that wind up being very hard to explain, it works out best with the indexing to do this---

@@ -125,9 +125,9 @@ def test_inverse_interleaved() -> None:
     ntt = AdditiveNTT(Elem8bFP, log_h, log_inv_rate)
     skip_ntt = AdditiveNTT(Elem8bFP, log_h, log_inv_rate, skip_rounds=tiling_factor)
     small = [ntt.field.random() for _ in range(1 << log_h - tiling_factor)]
-    tiled = sum(([small[i]] * (1 << tiling_factor) for i in range(1 << log_h - tiling_factor)), [])
+    tiled: list[Elem8bFP] = sum(([small[i]] * (1 << tiling_factor) for i in range(1 << log_h - tiling_factor)), [])
     small_inverse = skip_ntt._inverse_transform(small, 0)
-    tricky_inverse = sum(
+    tricky_inverse: list[Elem8bFP] = sum(
         (
             [small_inverse[i]] + [Elem8bFP.zero()] * ((1 << tiling_factor) - 1)
             for i in range(1 << log_h - tiling_factor)
@@ -143,5 +143,5 @@ def test_gao_mateer() -> None:
     log_h = 5
     log_inv_rate = 2
     mateer = GaoMateerBasis(Elem32bFP, max_log_h, log_inv_rate)  # to get "full" basis, run w/ max_log_h + rate == 32
-    input = [Elem16bFP.random() for _ in range(1 << log_h)]
+    input = [Elem32bFP.random() for _ in range(1 << log_h)]
     assert mateer.encode(input) == mateer._naive_encode(input)
