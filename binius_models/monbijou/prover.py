@@ -229,7 +229,7 @@ class Prover(Generic[F]):
     def initiate_second_phase(self):
         # assert: self.first_phase_sumcheck.round == 12
         r_s, r_j = self.first_phase_sumcheck.challenges[:6], self.first_phase_sumcheck.challenges[6:]
-        r_j_tensor = tensor_expand(r_j, 6)
+        r_j_tensor = tensor_expand(self.field, r_j, 6)
         w_r_j = [
             sum(
                 (r_j_tensor[j] if self.witness[y] >> j & 1 else self.field.zero() for j in range(64)), self.field.zero()

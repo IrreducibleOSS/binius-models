@@ -56,14 +56,12 @@ constraint_system = ConstraintSystem(  # a mock constraint system, hardcoded for
 def test_good():
     witness = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
     witness[63] = (ShiftOp.SRA(witness[2], 5) ^ ShiftOp.SRL(witness[5], 5)) & ShiftOp.SLL(witness[10], 55)
+
     prover = Prover(GHASHElem, constraint_system, witness)
 
-    r_zhat_prime = GHASHElem.random()
-    r_x_prime = [GHASHElem.random() for _ in range(constraint_system.l_and)]
-    (alpha_a, alpha_b, alpha_c) = prover._directly_evaluate(r_zhat_prime, r_x_prime)
-
     verifier = Verifier(GHASHElem, constraint_system, prover)
-    verifier.verify_shift_reduction(alpha_a, alpha_b, alpha_c)
+
+    verifier.verify_shift_reduction()
 
 
 # negative tests, to do:
