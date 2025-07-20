@@ -3,7 +3,7 @@ from typing import Generic, TypeVar
 from ..finite_fields.finite_field import FiniteFieldElem
 from .constraint_system import ConstraintSystem, ShiftOp
 from .prover import Prover
-from .utils import tensor_expand
+from .utils import tensor_expand, univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
@@ -14,8 +14,14 @@ class Verifier(Generic[F]):
         self.constraint_system = constraint_system
         self.prover = prover
 
-    def _evaluate_h_op(self, op: ShiftOp, r_j: list[F], r_s: list[F]) -> F:
-        return self.field.zero()
+    def _evaluate_h_op(self, r_zhat_prime: F, r_j: list[F], r_s: list[F]) -> F:
+        l_tilde = univariate_expand(self.field, r_zhat_prime)
+        # now comes the hard part!
+        return {
+            ShiftOp.SLL: self.field.zero(),
+            ShiftOp.SRL: self.field.zero(),
+            ShiftOp.SRA: self.field.zero(),
+        }
 
     def verify_shift_reduction(self):
         r_zhat_prime = self.field.random()
@@ -91,12 +97,12 @@ class Verifier(Generic[F]):
             for j, op, s in I_c:
                 M[op]["c"] += r_x_prime_tensor[i] * r_y_tensor[j] * r_s_tensor[s]
 
+        h_op = self._evaluate_h_op(r_zhat_prime, r_j, r_s)
         for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]:
-            h_op_r_j_r_s = self._evaluate_h_op(op, r_j, r_s)
             result = self.field.zero()
             for m, lambda_m in lambda_m.items():
                 result += lambda_m * M[op][m]
-            result *= h_op_r_j_r_s
+            result *= h_op[op]
             right_hand_multilinear += result
 
         assert claim == w_r_j_r_y * right_hand_multilinear  # just one check!
