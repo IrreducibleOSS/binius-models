@@ -77,7 +77,7 @@ class Prover(Generic[F]):
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
     def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
-        self.lambda_m = {  # will use these in second phase
+        self.lambdas = {  # will use these in second phase
             "a": lambda_a,
             "b": lambda_b,
             "c": lambda_c,
@@ -159,17 +159,17 @@ class Prover(Generic[F]):
         # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
         for j in range(64):
             for s in range(64):
-                g[ShiftOp.SLL]["a"][j][s] *= self.lambda_m["a"]
-                g[ShiftOp.SLL]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SLL]["b"][j][s]
-                g[ShiftOp.SLL]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SLL]["c"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] *= self.lambdas["a"]
+                g[ShiftOp.SLL]["a"][j][s] += self.lambdas["b"] * g[ShiftOp.SLL]["b"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] += self.lambdas["c"] * g[ShiftOp.SLL]["c"][j][s]
 
-                g[ShiftOp.SRL]["a"][j][s] *= self.lambda_m["a"]
-                g[ShiftOp.SRL]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SRL]["b"][j][s]
-                g[ShiftOp.SRL]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SRL]["c"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] *= self.lambdas["a"]
+                g[ShiftOp.SRL]["a"][j][s] += self.lambdas["b"] * g[ShiftOp.SRL]["b"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] += self.lambdas["c"] * g[ShiftOp.SRL]["c"][j][s]
 
-                g[ShiftOp.SRA]["a"][j][s] *= self.lambda_m["a"]
-                g[ShiftOp.SRA]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SRA]["b"][j][s]
-                g[ShiftOp.SRA]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SRA]["c"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] *= self.lambdas["a"]
+                g[ShiftOp.SRA]["a"][j][s] += self.lambdas["b"] * g[ShiftOp.SRA]["b"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] += self.lambdas["c"] * g[ShiftOp.SRA]["c"][j][s]
 
         # NOW going to flatten all 3 h's and all 3 (summed) g's. this is purely a matter of memory layout.
         # in a real implementation, we should probably arrange things so that they start and stay flat the whole time,
@@ -228,7 +228,7 @@ class Prover(Generic[F]):
         M = [self.field.zero()] * (1 << self.constraint_system.l_words)
         for y in range(1 << self.constraint_system.l_words):
             for op, m, s in self.column_index[y]:
-                M[y] += h_op_r_j_r_s[op] * self.lambda_m[m] * r_s_tensor[s] * self.M[op][m][s][y]
+                M[y] += h_op_r_j_r_s[op] * self.lambdas[m] * r_s_tensor[s] * self.M[op][m][s][y]
 
         multilinears = [w_r_j, M]
         composition = Polynomial(2, {(1, 1): self.field.one()})

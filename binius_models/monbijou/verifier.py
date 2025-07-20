@@ -54,7 +54,7 @@ class Verifier(Generic[F]):
         r_y = self.prover.second_phase_sumcheck.challenges[:]
 
         # begin computation of final evaluations.
-        lambda_m = {
+        lambdas = {
             "a": lambda_a,
             "b": lambda_b,
             "c": lambda_c,
@@ -65,11 +65,14 @@ class Verifier(Generic[F]):
         r_y_tensor = tensor_expand(self.field, r_y, self.constraint_system.l_words)
 
         # NOTE: compute w̃(r_j, r_y) manually for our (testing) purposes; in real life it will be delegated to the PCS
-        w_r_j_r_y = [
-            sum((r_j_tensor[j] for j in range(64) if self.prover.witness[y] >> j & 1), self.field.zero())
-            * r_y_tensor[y]
-            for y in range(1 << self.constraint_system.l_words)
-        ]
+        w_r_j_r_y = sum(
+            (
+                sum((r_j_tensor[j] for j in range(64) if self.prover.witness[y] >> j & 1), self.field.zero())
+                * r_y_tensor[y]
+                for y in range(1 << self.constraint_system.l_words)
+            ),
+            self.field.zero(),
+        )
 
         right_hand_multilinear = self.field.zero()
         M = {  # will contain M̃ₘ,ₒₚ(r'_x, r_y, r_s)
@@ -100,7 +103,7 @@ class Verifier(Generic[F]):
         h_op = self._evaluate_h_op(r_zhat_prime, r_j, r_s)
         for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]:
             result = self.field.zero()
-            for m, lambda_m in lambda_m.items():
+            for m, lambda_m in lambdas.items():
                 result += lambda_m * M[op][m]
             result *= h_op[op]
             right_hand_multilinear += result

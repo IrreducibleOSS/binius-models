@@ -9,7 +9,7 @@ constraint_system = ConstraintSystem(  # a mock constraint system, hardcoded for
     l_and=3,
     l_words=6,
     and_constraints=[
-        (  # (w[2] ~>> 5 ^ w[5] >> 5) & w[10] << 55 == w[63] ---- just a random constraint that I can mock
+        (  # (w[2] ~>> 5 ^ w[5] >> 5) & w[10] << 55 == w[63]---just a random constraint that I can make hold manually
             [(2, ShiftOp.SRA, 5), (5, ShiftOp.SRL, 5)],
             [(10, ShiftOp.SLL, 55)],
             [(63, ShiftOp.SLL, 0)],
