@@ -15,12 +15,33 @@ class Verifier(Generic[F]):
         self.prover = prover
 
     def _evaluate_h_op(self, r_zhat_prime: F, r_j: list[F], r_s: list[F]) -> F:
+        # to figure out. whether and how we can gain by returning all 3 of these at once.
         l_tilde = univariate_expand(self.field, r_zhat_prime)
         # now comes the hard part!
+        s = [self.field.one()] * 64
+        s_prime = [self.field.zero()] * 64
+        a = [self.field.zero()] * 64
+        j_product = self.field.one
+        for k in range(6):
+            # precompute some common subexpressions that we are going to re-use.
+            r_j_r_s = r_j[k] * r_s[k]  # jₖ ⋅ sₖ
+            r_j_one_rs = r_j[k] - r_j_r_s  # jₖ ⋅ (1 - sₖ)
+            one_r_j_rs = r_s[k] - r_j_r_s  # (1 - jₖ) ⋅ sₖ
+            thing = self.field.one() + r_j[k] + r_s[k]  # 1 + jₖ + sₖ
+            for i in range(1 << k):
+                s[1 << k | i] = r_j_one_rs * s[i]  # write upper halves first
+                s_prime[1 << k | i] = one_r_j_rs * s[i] + thing * s_prime[i]  # Iₖ = 1
+
+                s[i] = thing * s[i] + r_j_one_rs * s_prime[i]
+                s_prime[i] *= one_r_j_rs
+
+                a[1 << k | i] = r_s[k] + (self.field.one() + r_s[k]) * a[i]
+                a[i] += a[1 << k | i] - r_s[k]  # this is a bit of a trick; wastes an add, but saves a write to a temp
+            j_product *= r_j[k]
         return {
-            ShiftOp.SLL: self.field.zero(),
-            ShiftOp.SRL: self.field.zero(),
-            ShiftOp.SRA: self.field.zero(),
+            ShiftOp.SLL: s,
+            ShiftOp.SRL: s,  # ????????? how will i handle the transmutation of indices?
+            ShiftOp.SRA: [s[i] + j_product * a[i] for i in range(64)],
         }
 
     def verify_shift_reduction(self):
