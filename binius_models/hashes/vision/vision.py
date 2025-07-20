@@ -9,15 +9,15 @@ from typing import ClassVar, Generic, TypeVar
 from binius_models.finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
 from binius_models.hashes.vision.utils import VisionConstants, matrix_vector_multiply
 
-E = TypeVar("E", bound="BinaryTowerFieldElem")
+F = TypeVar("F", bound="BinaryTowerFieldElem")
 
 
-class Vision(ABC, Generic[E]):
+class Vision(ABC, Generic[F]):
     """Vision hash function.
     Use dump_vision_instance.sage to generate the constants for a new instance.
     """
 
-    elem: E
+    elem: F
     m: ClassVar[int]  # number of elements in the state (total)
     r: ClassVar[int]  # number of elements in the rate
     c: ClassVar[int]  # number of elements in the capacity
@@ -31,8 +31,8 @@ class Vision(ABC, Generic[E]):
         self.constants = self.get_constants()
         self.mds = self.get_mds()
 
-        self.key_schedule: list[list[E]]
-        self.state: list[E] = [self.elem.zero() for _ in range(self.m)]
+        self.key_schedule: list[list[F]]
+        self.state: list[F] = [self.elem.zero() for _ in range(self.m)]
 
         assert self.d <= self.r, "Modify squeezing function if this is the case."
 
@@ -42,7 +42,7 @@ class Vision(ABC, Generic[E]):
         pass
 
     @abstractmethod
-    def get_mds(self) -> list[list[E]]:
+    def get_mds(self) -> list[list[F]]:
         """Return the MDS matrix for this instance."""
         pass
 
@@ -51,10 +51,10 @@ class Vision(ABC, Generic[E]):
         """Sets the key schedule of the all-zero master key. Used for sponge mode."""
         pass
 
-    def sbox_layer(self, state: list[E], pi: int) -> list[E]:
+    def sbox_layer(self, state: list[F], pi: int) -> list[F]:
         return [self.sbox(x, pi) for x in state]
 
-    def sbox(self, x: E, pi: int) -> E:
+    def sbox(self, x: F, pi: int) -> F:
         """Apply the sbox to a state element.
         pi = 0: even sbox, pi_0
         pi = 1: odd sbox, pi_1
@@ -70,7 +70,7 @@ class Vision(ABC, Generic[E]):
 
         return result
 
-    def update_key_schedule(self, key: list[E]) -> None:
+    def update_key_schedule(self, key: list[F]) -> None:
         """Expand the master key into a keyschedule. Use all-zero key for Sponge mode."""
 
         self.key_schedule = []
@@ -91,7 +91,7 @@ class Vision(ABC, Generic[E]):
             state = [state[i] + key_injection[i] for i in range(self.m)]
             self.key_schedule.append(state)
 
-    def encrypt(self, plaintext: list[E]) -> list[E]:
+    def encrypt(self, plaintext: list[F]) -> list[F]:
         state = [x + y for x, y in zip(plaintext, self.key_schedule[0])]
         for r in range(2 * self.round_n):
             state = self.sbox_layer(state, r % 2)
@@ -103,19 +103,19 @@ class Vision(ABC, Generic[E]):
         self.set_zero_schedule()
         self.state = [self.elem.zero() for _ in range(self.m)]
 
-    def sponge_absorb(self, rate: list[E]) -> None:
+    def sponge_absorb(self, rate: list[F]) -> None:
         assert len(rate) == self.r
         self.state[: self.r] = rate
         self.state = self.encrypt(self.state)
 
-    def sponge_squeeze(self) -> list[E]:
+    def sponge_squeeze(self) -> list[F]:
         """Simplest squeeze, because digest < rate"""
         if self.d <= self.r:
             return self.state[: self.d]
         else:
             raise NotImplementedError()
 
-    def sponge_hash(self, message: list[E]) -> list[E]:
+    def sponge_hash(self, message: list[F]) -> list[F]:
         """This assumes the fixed length is the length of the message"""
         # pad input using Keccak padding scheme
         padding_len = self.r - (len(message) % self.r)

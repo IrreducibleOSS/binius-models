@@ -4,6 +4,7 @@ from ..finite_fields.finite_field import FiniteFieldElem
 from ..ips.sumcheck import Sumcheck
 from ..ips.utils import Polynomial
 from .constraint_system import ConstraintSystem, ShiftOp
+from .utils import tensor_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
@@ -106,14 +107,6 @@ class Prover(Generic[F]):
 
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
-    def _tensor_expand(self, x: list[F], vars: int) -> list[F]:
-        result = [self.field.one()] * (1 << vars)
-        for i in range(vars):
-            for j in range(1 << i):
-                result[1 << i | j] = result[j] * x[i]
-                result[j] -= result[1 << i | j]
-        return result
-
     def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
         self.lambda_m = {  # will use these in second phase
             "a": lambda_a,
@@ -132,7 +125,7 @@ class Prover(Generic[F]):
         for s in range(1, 64):
             h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
 
-        r_x_tensor = self._tensor_expand(self.r_x_prime, self.constraint_system.l_and)
+        r_x_tensor = tensor_expand(self.field, self.r_x_prime, self.constraint_system.l_and)
         # for each op × m × s, M[op][m][s] is Mₒₚ(r'ₓ, Y, s), the partial specialization of Mₒₚ(X, Y, s) at r'ₓ.
         # this looks like taking the Mₒₚ(X, Y, s) matrix, which is n_{and} × n_{word}, and folding it by ⊗(r'ₓ).
         # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
@@ -234,8 +227,9 @@ class Prover(Generic[F]):
         self.first_phase_sumcheck = Sumcheck(multilinears, composition)
 
     def initiate_second_phase(self):
+        # assert: self.first_phase_sumcheck.round == 12
         r_s, r_j = self.first_phase_sumcheck.challenges[:6], self.first_phase_sumcheck.challenges[6:]
-        r_j_tensor = self._tensor_expand(r_j, 6)
+        r_j_tensor = tensor_expand(r_j, 6)
         w_r_j = [
             sum(
                 (r_j_tensor[j] if self.witness[y] >> j & 1 else self.field.zero() for j in range(64)), self.field.zero()
@@ -261,7 +255,7 @@ class Prover(Generic[F]):
             ShiftOp.SRA: self.first_phase_sumcheck.multilinears[4][0],
         }
 
-        r_s_tensor = self._tensor_expand(r_s, 6)
+        r_s_tensor = tensor_expand(self.field, r_s, 6)
         M = [self.field.zero()] * (1 << self.constraint_system.l_words)
         for y in range(1 << self.constraint_system.l_words):
             for op, m, s in self.column_index[y]:

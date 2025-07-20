@@ -1,9 +1,10 @@
 import copy
 from typing import Generic, TypeVar
 
+from ..finite_fields.finite_field import FiniteFieldElem
 from ..finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
 
-F = TypeVar("F", bound=BinaryTowerFieldElem)
+F = TypeVar("F", bound=FiniteFieldElem)
 
 
 class Elem1b(BinaryTowerFieldElem):
