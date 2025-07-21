@@ -20,25 +20,33 @@ class Verifier(Generic[F]):
         # now comes the hard part!
         s = [self.field.one()] * 64
         s_prime = [self.field.zero()] * 64
+        s_transpose = [self.field.one()] * 64
+        s_transpose_prime = [self.field.zero()] * 64
         a = [self.field.zero()] * 64
-        j_product = self.field.one
+        j_product = self.field.one()
         for k in range(6):
             # precompute some common subexpressions that we are going to re-use.
-            r_j_r_s = r_j[k] * r_s[k]  # jₖ ⋅ sₖ
-            r_j_one_rs = r_j[k] - r_j_r_s  # jₖ ⋅ (1 - sₖ)
-            one_r_j_rs = r_s[k] - r_j_r_s  # (1 - jₖ) ⋅ sₖ
-            thing = self.field.one() + r_j[k] + r_s[k]  # 1 + jₖ + sₖ
-            for i in range(1 << k):
+            both = r_j[k] * r_s[k]  # jₖ ⋅ sₖ
+            r_j_one_rs = r_j[k] - both  # jₖ ⋅ (1 - sₖ)
+            one_r_j_rs = r_s[k] - both  # (1 - jₖ) ⋅ sₖ
+            xor = r_j[k] + r_s[k]
+            eq = self.field.one() + xor  # 1 + jₖ + sₖ
+            zero = eq + both  # 1 + jₖ + sₖ + jₖ ⋅ sₖ
+            for i in range(1 << k):  # "hot" loop
                 s[1 << k | i] = r_j_one_rs * s[i]  # write upper halves first
-                s_prime[1 << k | i] = one_r_j_rs * s[i] + thing * s_prime[i]  # Iₖ = 1
-
-                s[i] = thing * s[i] + r_j_one_rs * s_prime[i]
+                s_prime[1 << k | i] = one_r_j_rs * s[i] + eq * s_prime[i]  # Iₖ = 1
+                s[i] = eq * s[i] + r_j_one_rs * s_prime[i]
                 s_prime[i] *= one_r_j_rs
+
+                s_transpose[1 << k | i] = eq * s_transpose[i] + zero * s_transpose_prime[i]
+                s_transpose_prime[1 << k | i] = both * s_transpose[i]
+                s_transpose_prime[i] = both * s_transpose[i] + xor * s_transpose_prime[i]
+                s_transpose[i] *= zero  # careful with overwriting the variable before you're done with it
 
                 a[1 << k | i] = r_s[k] + (self.field.one() + r_s[k]) * a[i]
                 a[i] += a[1 << k | i] - r_s[k]  # this is a bit of a trick; wastes an add, but saves a write to a temp
             j_product *= r_j[k]
-        sll = self.field.zero()
+        sll = sum((l_tilde[i] * s_transpose[i] for i in range(64)), self.field.zero())
         srl = sum((l_tilde[i] * s[i] for i in range(64)), self.field.zero())
         # sra == ∑ᵢ L̃(i) ⋅ (srlᵢ + ∏ₖ rⱼ[k] ⋅ aᵢ)
         #     == ∑ᵢ L̃(i) ⋅ srlᵢ + ∏ₖ rⱼ[k] ⋅ [ ∑ᵢ L̃(i) ⋅ aᵢ ]
