@@ -38,10 +38,16 @@ class Verifier(Generic[F]):
                 a[1 << k | i] = r_s[k] + (self.field.one() + r_s[k]) * a[i]
                 a[i] += a[1 << k | i] - r_s[k]  # this is a bit of a trick; wastes an add, but saves a write to a temp
             j_product *= r_j[k]
+        sll = self.field.zero()
+        srl = sum((l_tilde[i] * s[i] for i in range(64)), self.field.zero())
+        # sra == ∑ᵢ L̃(i) ⋅ (srlᵢ + ∏ₖ rⱼ[k] ⋅ aᵢ)
+        #     == ∑ᵢ L̃(i) ⋅ srlᵢ + ∏ₖ rⱼ[k] ⋅ [ ∑ᵢ L̃(i) ⋅ aᵢ ]
+        #     == srl + ∏ₖ rⱼ[k] ⋅ [ ∑ᵢ L̃(i) ⋅ aᵢ ]
+        sra = srl + j_product * sum((l_tilde[i] * a[i] for i in range(64)), self.field.zero())
         return {
-            ShiftOp.SLL: s,
-            ShiftOp.SRL: s,  # ????????? how will i handle the transmutation of indices?
-            ShiftOp.SRA: [s[i] + j_product * a[i] for i in range(64)],
+            ShiftOp.SLL: sll,
+            ShiftOp.SRL: srl,
+            ShiftOp.SRA: sra,
         }
 
     def verify_shift_reduction(self):
