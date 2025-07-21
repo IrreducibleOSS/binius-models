@@ -53,7 +53,7 @@ constraint_system = ConstraintSystem(  # a mock constraint system, hardcoded for
 )
 
 
-def test_good():
+def test_monbijou():
     witness = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
     witness[63] = (ShiftOp.SRA(witness[2], 5) ^ ShiftOp.SRL(witness[5], 5)) & ShiftOp.SLL(witness[10], 55)
 
