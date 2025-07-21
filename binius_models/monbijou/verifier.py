@@ -38,8 +38,8 @@ class Verifier(Generic[F]):
                 s[i] = eq * s[i] + r_j_one_rs * s_prime[i]
                 s_prime[i] *= one_r_j_rs
 
-                s_transpose[1 << k | i] = eq * s_transpose[i] + zero * s_transpose_prime[i]
-                s_transpose_prime[1 << k | i] = both * s_transpose[i]
+                s_transpose[1 << k | i] = xor * s_transpose[i] + zero * s_transpose_prime[i]
+                s_transpose_prime[1 << k | i] = both * s_transpose_prime[i]
                 s_transpose_prime[i] = both * s_transpose[i] + xor * s_transpose_prime[i]
                 s_transpose[i] *= zero  # careful with overwriting the variable before you're done with it
 
