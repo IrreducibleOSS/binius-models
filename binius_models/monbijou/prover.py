@@ -4,6 +4,7 @@ from ..finite_fields.finite_field import FiniteFieldElem
 from ..ips.sumcheck import Sumcheck
 from ..ips.utils import Polynomial
 from .constraint_system import ConstraintSystem, ShiftOp
+from .utils import tensor_expand, univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
@@ -16,16 +17,6 @@ class Prover(Generic[F]):
         assert len(witness) == 1 << constraint_system.l_words
         assert all(witness[i] in range(1 << 64) for i in range(1 << constraint_system.l_words))
         assert 1 << constraint_system.l_and == len(constraint_system.and_constraints)
-
-        # begin computation of barycentric weight (!). indeed, just one weight, not many.
-        # it's a fact that when the interpolation domain is a power of 2, then all barycentric weights wind up identical
-        # if the domain is of size 2ᵏ, then for each i ∈ {0, … , 2ᵏ − 1}, { i ⊕ j | j ≠ i } == {1, … , 2ᵏ − 1} (!).
-        # indeed for each i, xor-with-i is a bijection on {0, … , 2ᵏ − 1} ≅ ℤ₂ᵏ. its image, \ {0}, is {1, … , 2ᵏ − 1}.
-        # it's enough to take the product of the elements of {1, … , 2ᵏ − 1}, and then invert that, to get our "weight".
-        w = self.field(1)
-        for i in range(1, 64):
-            w *= self.field(i)
-        self.w = w.inverse()
 
         # begin populating inner
         self.a = [0] * (1 << constraint_system.l_and)
@@ -57,27 +48,6 @@ class Prover(Generic[F]):
 
         assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
-    def _l_tilde(self, r_zhat_prime):
-        # computes the list L̃(r'_ẑ, i), for i ∈ {0, … , 63}. the standard barycentric approach is to realize that,
-        # for each i, L̃(r'_ẑ, i) == ∏ⱼ(r'_ẑ – j) ⋅ [ w[i] / (r'_ẑ – i) ], where w[i] are the barycentric weights.
-        # the left-hand product ∏ⱼ( r'_ẑ – j) doesn't depend on i, so we can compute it once, using n – 1 mults,
-        # and then finish the job using n mults and n divisions. total n - 1 + 2 ⋅ n == 3 ⋅ n - 1 mults and n inversions
-
-        # we are going to be slightly cleverer. for each i, we want the all-but-one product p[i] ≔ ∏_{j ≠ i} (r'_ẑ – j)
-        # if we have those, we can finish the job w/ n further mults, by setting L̃(r'_ẑ, i) ≔ p[i] ⋅ w[i] for each i.
-        # we can get the all-but-one products with 2 ⋅ n space overhead by precomputing the prefix and suffix products
-        # when all is said and done, we get 2 ⋅ (n – 1) + 2 ⋅ n = 4 ⋅ n - 2 mults, so we replaced invs --> mults
-        # the problem size is small---but see later whether we end up needing this in any "hot" parts of the code?
-        prefixes = [self.field.one()] * 64
-        suffixes = [self.field.one()] * 64
-        for i in range(1, 64):
-            prefixes[i] = prefixes[i - 1] * (r_zhat_prime - self.field(i - 1))
-            suffixes[64 - 1 - i] = suffixes[64 - i] * (r_zhat_prime - self.field(64 - i))
-        result = [self.field.zero()] * 64
-        for i in range(64):
-            result[i] = prefixes[i] * suffixes[i] * self.w  # these are all the same....! can you save?
-        return result
-
     def _directly_evaluate(self, r_zhat_prime, r_x_prime):
         # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
         # verifier can use the resulting things as the claims α_a, α_b, α_c to feed into the shift reduction
@@ -89,7 +59,7 @@ class Prover(Generic[F]):
         # this method can be viewed as a stand-in for the prover's univariate skip, in terms of the state we're left in.
         # will take this opportunity to memoize l_tilde ≔ L̃(r'_ẑ, i); the prover would compute this at the end of skip
         assert len(r_x_prime) == self.constraint_system.l_and
-        self.l_tilde = self._l_tilde(r_zhat_prime)
+        self.l_tilde = univariate_expand(self.field, r_zhat_prime)
         self.r_x_prime = r_x_prime
 
         def extrapolate_bitstring(value):
@@ -106,16 +76,8 @@ class Prover(Generic[F]):
 
         return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
 
-    def _tensor_expand(self, x: list[F], vars: int) -> list[F]:
-        result = [self.field.one()] * (1 << vars)
-        for i in range(vars):
-            for j in range(1 << i):
-                result[1 << i | j] = result[j] * x[i]
-                result[j] -= result[1 << i | j]
-        return result
-
     def initiate_first_phase(self, lambda_a, lambda_b, lambda_c):
-        self.lambda_m = {  # will use these in second phase
+        self.lambdas = {  # will use these in second phase
             "a": lambda_a,
             "b": lambda_b,
             "c": lambda_c,
@@ -132,7 +94,7 @@ class Prover(Generic[F]):
         for s in range(1, 64):
             h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
 
-        r_x_tensor = self._tensor_expand(self.r_x_prime, self.constraint_system.l_and)
+        r_x_tensor = tensor_expand(self.field, self.r_x_prime, self.constraint_system.l_and)
         # for each op × m × s, M[op][m][s] is Mₒₚ(r'ₓ, Y, s), the partial specialization of Mₒₚ(X, Y, s) at r'ₓ.
         # this looks like taking the Mₒₚ(X, Y, s) matrix, which is n_{and} × n_{word}, and folding it by ⊗(r'ₓ).
         # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
@@ -197,17 +159,17 @@ class Prover(Generic[F]):
         # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
         for j in range(64):
             for s in range(64):
-                g[ShiftOp.SLL]["a"][j][s] *= self.lambda_m["a"]
-                g[ShiftOp.SLL]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SLL]["b"][j][s]
-                g[ShiftOp.SLL]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SLL]["c"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] *= self.lambdas["a"]
+                g[ShiftOp.SLL]["a"][j][s] += self.lambdas["b"] * g[ShiftOp.SLL]["b"][j][s]
+                g[ShiftOp.SLL]["a"][j][s] += self.lambdas["c"] * g[ShiftOp.SLL]["c"][j][s]
 
-                g[ShiftOp.SRL]["a"][j][s] *= self.lambda_m["a"]
-                g[ShiftOp.SRL]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SRL]["b"][j][s]
-                g[ShiftOp.SRL]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SRL]["c"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] *= self.lambdas["a"]
+                g[ShiftOp.SRL]["a"][j][s] += self.lambdas["b"] * g[ShiftOp.SRL]["b"][j][s]
+                g[ShiftOp.SRL]["a"][j][s] += self.lambdas["c"] * g[ShiftOp.SRL]["c"][j][s]
 
-                g[ShiftOp.SRA]["a"][j][s] *= self.lambda_m["a"]
-                g[ShiftOp.SRA]["a"][j][s] += self.lambda_m["b"] * g[ShiftOp.SRA]["b"][j][s]
-                g[ShiftOp.SRA]["a"][j][s] += self.lambda_m["c"] * g[ShiftOp.SRA]["c"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] *= self.lambdas["a"]
+                g[ShiftOp.SRA]["a"][j][s] += self.lambdas["b"] * g[ShiftOp.SRA]["b"][j][s]
+                g[ShiftOp.SRA]["a"][j][s] += self.lambdas["c"] * g[ShiftOp.SRA]["c"][j][s]
 
         # NOW going to flatten all 3 h's and all 3 (summed) g's. this is purely a matter of memory layout.
         # in a real implementation, we should probably arrange things so that they start and stay flat the whole time,
@@ -234,8 +196,9 @@ class Prover(Generic[F]):
         self.first_phase_sumcheck = Sumcheck(multilinears, composition)
 
     def initiate_second_phase(self):
+        # assert: self.first_phase_sumcheck.round == 12
         r_s, r_j = self.first_phase_sumcheck.challenges[:6], self.first_phase_sumcheck.challenges[6:]
-        r_j_tensor = self._tensor_expand(r_j, 6)
+        r_j_tensor = tensor_expand(self.field, r_j, 6)
         w_r_j = [
             sum(
                 (r_j_tensor[j] if self.witness[y] >> j & 1 else self.field.zero() for j in range(64)), self.field.zero()
@@ -261,11 +224,11 @@ class Prover(Generic[F]):
             ShiftOp.SRA: self.first_phase_sumcheck.multilinears[4][0],
         }
 
-        r_s_tensor = self._tensor_expand(r_s, 6)
+        r_s_tensor = tensor_expand(self.field, r_s, 6)
         M = [self.field.zero()] * (1 << self.constraint_system.l_words)
         for y in range(1 << self.constraint_system.l_words):
             for op, m, s in self.column_index[y]:
-                M[y] += h_op_r_j_r_s[op] * self.lambda_m[m] * r_s_tensor[s] * self.M[op][m][s][y]
+                M[y] += h_op_r_j_r_s[op] * self.lambdas[m] * r_s_tensor[s] * self.M[op][m][s][y]
 
         multilinears = [w_r_j, M]
         composition = Polynomial(2, {(1, 1): self.field.one()})

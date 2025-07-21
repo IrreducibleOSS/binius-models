@@ -2,17 +2,19 @@ from enum import Enum
 
 
 class ShiftOp(Enum):
-    def SLL(v, s):
-        return v << s
-
-    def SRL(v, s):
-        return v >> s
-
-    def SRA(v, s):
-        return (v if v < 1 << 63 else v - (1 << 64)) >> s & (1 << 64) - 1
+    SLL = "SLL"
+    SRL = "SRL"
+    SRA = "SRA"
 
     def __call__(self, v, s):
-        return self.value(v, s)
+        if self == ShiftOp.SLL:
+            return v << s
+        elif self == ShiftOp.SRL:
+            return v >> s
+        elif self == ShiftOp.SRA:
+            return (v if v < 1 << 63 else v - (1 << 64)) >> s & (1 << 64) - 1
+        else:
+            raise ValueError(f"Unknown shift operation: {self}")
 
 
 class ConstraintSystem:

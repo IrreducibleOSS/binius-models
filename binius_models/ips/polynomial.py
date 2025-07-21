@@ -9,15 +9,11 @@ from sympy import Expr, Pow, S, symbols
 
 from binius_models.finite_fields.tower import BinaryTowerFieldElem
 
-E = TypeVar("E", bound=BinaryTowerFieldElem)
+F = TypeVar("F", bound=BinaryTowerFieldElem)
 
 
 class Polynomial:
-    """This class supercedes sumcheck.Polynomial128.
-    TODO Replace Polynomial128 all over the place.
-    """
-
-    def __init__(self, elem_t: Type[E], variables: int, terms: dict[tuple[int, ...], int]) -> None:
+    def __init__(self, elem_t: Type[F], variables: int, terms: dict[tuple[int, ...], int]) -> None:
         self.elem_t = elem_t
         self.variables = variables
 
@@ -30,7 +26,7 @@ class Polynomial:
         self.terms = {multidegree: self.elem_t(coefficient) for multidegree, coefficient in terms.items()}
         self.max_terms = Polynomial.get_max_terms(self.degree, variables)
 
-    def evaluate(self, argument: list[E]) -> E:
+    def evaluate(self, argument: list[F]) -> F:
         assert len(argument) == self.variables
         result = self.elem_t.zero()
         for multidegree, coefficient in self.terms.items():
@@ -65,7 +61,7 @@ class Polynomial:
         return comb(degree + variables, variables)
 
     @staticmethod
-    def random(elem_t: Type[E], degree: int, variables: int, term_num: int | None = None) -> Polynomial:
+    def random(elem_t: Type[F], degree: int, variables: int, term_num: int | None = None) -> Polynomial:
         if term_num is None:
             term_num = Polynomial.get_max_terms(degree, variables)
         else:

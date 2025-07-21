@@ -1,10 +1,10 @@
 from math import ceil, log2
 from typing import Generic, TypeVar
 
-from ..finite_fields.tower import BinaryTowerFieldElem
+from ..finite_fields.finite_field import FiniteFieldElem
 from ..utils.utils import bit_reverse, bits_mask, is_bit_set, is_power_of_two
 
-F = TypeVar("F", bound=BinaryTowerFieldElem)
+F = TypeVar("F", bound=FiniteFieldElem)
 
 
 class AdditiveNTT(Generic[F]):

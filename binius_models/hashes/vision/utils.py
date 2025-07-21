@@ -8,10 +8,10 @@ from typing import Any, Generic, TypeVar
 
 from binius_models.finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
 
-E = TypeVar("E", bound="BinaryTowerFieldElem")
+F = TypeVar("F", bound="BinaryTowerFieldElem")
 
 
-def naive_determinant(matrix: list[list[E]]) -> E:
+def naive_determinant(matrix: list[list[F]]) -> F:
     """Calculate the determinant of a square matrix"""
 
     n = len(matrix)
@@ -30,14 +30,14 @@ def naive_determinant(matrix: list[list[E]]) -> E:
     return det
 
 
-def matrix_from_circulant(circulant: list[E]) -> list[list[E]]:
+def matrix_from_circulant(circulant: list[F]) -> list[list[F]]:
     """Return a matrix from a circulant vector"""
     n = len(circulant)
     matrix = [[circulant[(j - i) % n] for j in range(n)] for i in range(n)]
     return matrix
 
 
-def naive_matrix_inverse(matrix: list[list[E]]) -> list[list[E]]:
+def naive_matrix_inverse(matrix: list[list[F]]) -> list[list[F]]:
     det = determinant(matrix)
     if det == matrix[0][0].zero():
         raise ValueError("Matrix is not invertible")
@@ -47,7 +47,7 @@ def naive_matrix_inverse(matrix: list[list[E]]) -> list[list[E]]:
     return [[adj[r][c] * det_inv for c in range(len(adj))] for r in range(len(adj))]
 
 
-def determinant(matrix: list[list[E]]) -> E:
+def determinant(matrix: list[list[F]]) -> F:
     one = matrix[0][0].one()
     zero = matrix[0][0].zero()
     n = len(matrix)
@@ -61,7 +61,7 @@ def determinant(matrix: list[list[E]]) -> E:
     return det
 
 
-def matrix_inverse(matrix: list[list[E]]) -> list[list[E]]:
+def matrix_inverse(matrix: list[list[F]]) -> list[list[F]]:
     one = matrix[0][0].one()
     zero = matrix[0][0].zero()
     n = len(matrix)
@@ -79,7 +79,7 @@ def matrix_inverse(matrix: list[list[E]]) -> list[list[E]]:
     return transpose(inverse)
 
 
-def _lu_decomposition(A: list[list[E]]) -> tuple[list[list[E]], list[list[E]]]:
+def _lu_decomposition(A: list[list[F]]) -> tuple[list[list[F]], list[list[F]]]:
     """
     Perform LU decomposition of a square matrix A.
     A is decomposed into L and U such that A = LU.
@@ -115,7 +115,7 @@ def _lu_decomposition(A: list[list[E]]) -> tuple[list[list[E]], list[list[E]]]:
     return L, U
 
 
-def _forward_substitution(L: list[list[E]], B: list[E]) -> list[E]:
+def _forward_substitution(L: list[list[F]], B: list[F]) -> list[F]:
     n = len(L)
     zero = L[0][0].zero()
     Y = [zero for _ in range(n)]
@@ -124,7 +124,7 @@ def _forward_substitution(L: list[list[E]], B: list[E]) -> list[E]:
     return Y
 
 
-def _backward_substitution(H: list[list[E]], Y: list[E]) -> list[E]:
+def _backward_substitution(H: list[list[F]], Y: list[F]) -> list[F]:
     n = len(H)
     zero = H[0][0].zero()
     X = [zero for _ in range(n)]
@@ -134,14 +134,14 @@ def _backward_substitution(H: list[list[E]], Y: list[E]) -> list[E]:
     return X
 
 
-def matrix_minor(matrix: list[list[E]], i: int, j: int) -> list[list[E]]:
+def matrix_minor(matrix: list[list[F]], i: int, j: int) -> list[list[F]]:
     """Return the minor of matrix[i][j]"""
     return [row[:j] + row[j + 1 :] for row in (matrix[:i] + matrix[i + 1 :])]
 
 
-def adjugate(matrix: list[list[E]]) -> list[list[E]]:
+def adjugate(matrix: list[list[F]]) -> list[list[F]]:
     n = len(matrix)
-    cofactors: list[list[E]] = [[matrix[0][0].zero() for _ in range(n)] for _ in range(n)]
+    cofactors: list[list[F]] = [[matrix[0][0].zero() for _ in range(n)] for _ in range(n)]
     for r in range(n):
         for c in range(n):
             # removing ((-1) ** (r + c)) * because we are in a binary field
@@ -149,11 +149,11 @@ def adjugate(matrix: list[list[E]]) -> list[list[E]]:
     return transpose(cofactors)
 
 
-def transpose(matrix: list[list[E]]) -> list[list[E]]:
+def transpose(matrix: list[list[F]]) -> list[list[F]]:
     return [list(row) for row in zip(*matrix)]
 
 
-def matrix_is_invertible(matrix: list[list[E]]) -> bool:
+def matrix_is_invertible(matrix: list[list[F]]) -> bool:
     return determinant(matrix) != matrix[0][0].zero()
 
 
@@ -177,9 +177,9 @@ class Shaker:
 
 
 # vision specific functions
-def linearized_is_invertible(coefficients: list[E]) -> bool:
+def linearized_is_invertible(coefficients: list[F]) -> bool:
     deg: int = coefficients[0].field.degree
-    mat: list[list[E]] = [[type(coefficients[0]).zero() for _ in range(deg)] for _ in range(deg)]
+    mat: list[list[F]] = [[type(coefficients[0]).zero() for _ in range(deg)] for _ in range(deg)]
 
     for i in range(min(deg, len(coefficients))):
         mat[0][i] = coefficients[i]
@@ -196,7 +196,7 @@ def linearized_is_invertible(coefficients: list[E]) -> bool:
     return matrix_is_invertible(mat)
 
 
-def affine_inverse(b: list[E]) -> list[E]:
+def affine_inverse(b: list[F]) -> list[F]:
     """Return the inverse of the affine linearized polynomial b"""
     deg = b[0].field.degree
 
@@ -223,7 +223,7 @@ def affine_inverse(b: list[E]) -> list[E]:
     return [b_1] + b_i
 
 
-def matrix_vector_multiply(matrix: list[list[E]], vector: list[E]) -> list[E]:
+def matrix_vector_multiply(matrix: list[list[F]], vector: list[F]) -> list[F]:
     n = len(matrix)
     zero = matrix[0][0].zero()
 
@@ -237,15 +237,15 @@ def matrix_vector_multiply(matrix: list[list[E]], vector: list[E]) -> list[E]:
 
 
 @dataclass(frozen=True)
-class VisionConstants(Generic[E]):
-    b: list[E]
-    b_inv: list[E]
-    init_const: list[E]
-    matrix_const: list[list[E]]
-    const_const: list[E]
+class VisionConstants(Generic[F]):
+    b: list[F]
+    b_inv: list[F]
+    init_const: list[F]
+    matrix_const: list[list[F]]
+    const_const: list[F]
 
 
-def is_mds(matrix: list[list[E]]) -> bool:
+def is_mds(matrix: list[list[F]]) -> bool:
     """this will "never" finish for n = 24
     O(sum_{k=1}^n {(n choose k)^2 * k!)}"""
     n = len(matrix)
@@ -259,7 +259,7 @@ def is_mds(matrix: list[list[E]]) -> bool:
     return True
 
 
-def echelon_form(matrix: list[list[E]]) -> list[list[E]]:
+def echelon_form(matrix: list[list[F]]) -> list[list[F]]:
     row_num = len(matrix)
     col_num = len(matrix[0])
 
@@ -299,18 +299,18 @@ class Bit(BinaryTowerFieldElem):
     field = FanPaarTowerField(0)
 
 
-def elem2bits(x: E) -> list[Bit]:
+def elem2bits(x: F) -> list[Bit]:
     return [Bit((x.value >> j) & 1) for j in range(x.field.degree)]
 
 
-def bits2elem(x: list[E]) -> Any:
+def bits2elem(x: list[F]) -> Any:
     class Elem(BinaryTowerFieldElem):
         field = FanPaarTowerField(ceil(log2(len(x))))
 
     return Elem(sum([x[j].value << j for j in range(len(x))]))
 
 
-def evaluate_affine_linearized_poly(poly: list[E], x: E) -> E:
+def evaluate_affine_linearized_poly(poly: list[F], x: F) -> F:
     result = poly[-1]
     base = x
     for i in range(len(poly) - 1):
@@ -319,7 +319,7 @@ def evaluate_affine_linearized_poly(poly: list[E], x: E) -> E:
     return result
 
 
-def generate_affine_matrix(p: list[E]) -> tuple[list[list[Bit]], list[Bit]]:
+def generate_affine_matrix(p: list[F]) -> tuple[list[list[Bit]], list[Bit]]:
     """returns a matrix m and a vector v of the affine linearized polynomial p"""
 
     Elem = type(p[0])
