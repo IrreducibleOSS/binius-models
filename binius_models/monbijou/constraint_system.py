@@ -8,7 +8,7 @@ class ShiftOp(Enum):
 
     def __call__(self, v, s):
         if self == ShiftOp.SLL:
-            return v << s
+            return v << s & (1 << 64) - 1
         elif self == ShiftOp.SRL:
             return v >> s
         elif self == ShiftOp.SRA:

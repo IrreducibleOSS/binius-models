@@ -26,31 +26,33 @@ class Prover(Generic[F]):
         # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index".
         # the a, b, c are just as in the paper, and are computed in the same way as there (by shifting and accumulating)
         # the column index is an auxiliary data structure which will be used to speed up the sumcheck's first phase.
-        # the point is to store, for each value y ∈ {0, … , n_{words} – 1} indexing into the witness,
-        # the set of (op, m, s)s for which the yᵗʰ column of the matrix M_{op, m}(X, y, s) is not identically zero.
+        # the point is to store, for each value y ∈ {0, … , n_{words} – 1} indexing into the witness, a dictionary,
+        # whose keys are those (op, m, s)s for which the yᵗʰ column of M_{op, m}(X, y, s) is not identically zero.
+        # the VALUE at self.column_index[y][(op, m, s)] will ultimately be Mₒₚ(r'ₓ, Y, s). see below for computation.
         # these will be exactly the (op, m, s) for which the prover needs to update the "gacc" accumulator; see below.
-
-        # btw, our use of sets is necessary. to see this, take the case that M_{op, m}(X, y, s) has 2 nonzero entries.
-        # in this case, M[op][m][s][y] below will be the sum of exactly two entries of the tensor of r'ₓ.
-        # i.e., the fact of two entries being present in that column will be accounted for during the computation of M.
-        # next, for each j for which w(j, s) = 1, we only want to add M[op][m][s][y] once to g[op][m][j][s], not twice.
-        self.column_index: list[set[int]] = [set() for _ in range(1 << constraint_system.l_words)]
+        self.column_index: list[dict[tuple[ShiftOp, str, int], F]] = [{} for _ in range(1 << constraint_system.l_words)]
         for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
             for j, op, s in I_a:
                 self.a[i] ^= op(self.witness[j], s)
-                self.column_index[j].add((op, "a", s))
+                self.column_index[j][(op, "a", s)] = self.field.zero()
             for j, op, s in I_b:
                 self.b[i] ^= op(self.witness[j], s)
-                self.column_index[j].add((op, "b", s))
+                self.column_index[j][(op, "b", s)] = self.field.zero()
             for j, op, s in I_c:
                 self.c[i] ^= op(self.witness[j], s)
-                self.column_index[j].add((op, "c", s))
+                self.column_index[j][(op, "c", s)] = self.field.zero()
+        # note: for each y, the KEYS (m, op, s) of column_index[y] will only depend on the constraint system, while
+        # the VALUES will ultimately depend on quantities unknown till runtime, namely r'ₓ (though not on the witness!).
+        # thus these need to be purged if you ever want to run the same prover twice, even if the witness doesn't change
+        # this is an odd thing to do, so i will let them sit (i.e., don't bother purging at the beginning of proofgen).
+        # technically, the constraint-system-dependent part, the witness-dependent part, and the runtime-dependent part
+        # could / should all be broken apart, for exactness. i don't know that it's necessary to do that for now?
 
-        # assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
+        assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
     def _directly_evaluate(self, r_zhat_prime, r_x_prime):
         # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
-        # verifier can use the resulting things as the claims α_a, α_b, α_c to feed into the shift reduction
+        # verifier can use the resulting things as the claims α_a, α_b, α_c to feed into the shift reduction.
         # in practice, these values will probably "pop out" for free at the end of the prover's univariate skip.
         # as for the verifier, my guess is that the prover will nondeterministically send them to the verifier,
         # so that the verifier can wrap up the univariate skip. pending the correctness of the supplied values.
@@ -64,7 +66,7 @@ class Prover(Generic[F]):
 
         def extrapolate_bitstring(value):
             # interpreting `value` as the (bit-valued!) evaluations of some univariate polynomial over the domain D,
-            # returns that polynomial's value at r'_x. because we precomputed L̃(r'_ẑ, i), just now need a subset sum.
+            # returns that polynomial's value at r'_ẑ. because we precomputed L̃(r'_ẑ, i), just now need a subset sum.
             return sum((self.l_tilde[i] for i in range(64) if value >> i & 1), self.field.zero())
 
         def evaluate(m):
@@ -95,36 +97,21 @@ class Prover(Generic[F]):
             h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
 
         r_x_tensor = tensor_expand(self.field, self.r_x_prime, self.constraint_system.l_and)
-        # for each op × m × s, M[op][m][s] is Mₒₚ(r'ₓ, Y, s), the partial specialization of Mₒₚ(X, Y, s) at r'ₓ.
-        # this looks like taking the Mₒₚ(X, Y, s) matrix, which is n_{and} × n_{word}, and folding it by ⊗(r'ₓ).
-        # i.e., we should tensor r'ₓ, and interpret the result as a row-vector, and multiply Mₒₚ on the left.
-        # the result is a length-n_{words} row-vector; moreover, we have a such thing for each op × m × s.
-        # since Mₒₚ(X, Y, s) is sparse + binary, we can get this by allocating n_{words} and iterating through the 1s.
-        self.M = {  # store these. will reuse them in the second phase
-            ShiftOp.SLL: {
-                "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-                "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-                "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-            },
-            ShiftOp.SRL: {
-                "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-                "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-                "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-            },
-            ShiftOp.SRA: {
-                "a": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-                "b": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-                "c": [[self.field.zero()] * (1 << self.constraint_system.l_words) for _ in range(64)],
-            },
-        }  # outer index s; inner index y
+        # for each y ∈ {0, … , n_{words} – 1}, for each op × m × s for which Mₒₚ(X, y, s) is not completely empty,
+        # we are going to accumulate Mₒₚ(r'ₓ, Y, s) into column_index[y][(op, m, s)]. since nonempty, it will be nonzero
+        # to do this we just need to add ⊗(r'ₓ)[x] to column_index[y][(op, m, s)] for each x for which Mₒₚ(x, y, s) = 1.
         for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
             for y, op, s in I_a:
-                self.M[op]["a"][s][y] += r_x_tensor[x]
+                self.column_index[y][(op, "a", s)] += r_x_tensor[x]
             for y, op, s in I_b:
-                self.M[op]["b"][s][y] += r_x_tensor[x]
+                self.column_index[y][(op, "b", s)] += r_x_tensor[x]
             for y, op, s in I_c:
-                self.M[op]["c"][s][y] += r_x_tensor[x]
+                self.column_index[y][(op, "c", s)] += r_x_tensor[x]
 
+        # these g's are actually surprisingly large. we have 9 × 64 × 64 field elements to store; this is ≈≈ 576 KiB.
+        # this is about as much memory as we are liable to need in the second phase, for n_{words} == 15, so it seems ok
+        # and moreover, we will do better than this _at best_ by a factor of 3, in view of how the sumcheck below goes.
+        # optimizing this seems not simple, and not sure if we need to go down that path or not.
         g = {  # outer index j, inner index s
             ShiftOp.SLL: {
                 "a": [[self.field.zero()] * 64 for _ in range(64)],
@@ -147,8 +134,8 @@ class Prover(Generic[F]):
             for j in range(64):
                 # todo: there is a bitwise / simd-ish vibe here; revisit whether there is some clever memory stuff
                 if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
-                    for op, m, s in self.column_index[y]:
-                        g[op][m][j][s] += self.M[op][m][s][y]
+                    for (op, m, s), value in self.column_index[y].items():
+                        g[op][m][j][s] += value
                         # the alternative is to simply loop over all op, m, and s, and do the above line for every one.
                         # that would be perfectly correct, since when `self.column_index[y] = []`, M[op][m][s][y] = 0.
                         # it would also be more of a regular computation (simd stuff possible? not sure.).
@@ -227,8 +214,8 @@ class Prover(Generic[F]):
         r_s_tensor = tensor_expand(self.field, r_s, 6)
         M = [self.field.zero()] * (1 << self.constraint_system.l_words)
         for y in range(1 << self.constraint_system.l_words):
-            for op, m, s in self.column_index[y]:
-                M[y] += h_op_r_j_r_s[op] * self.lambdas[m] * r_s_tensor[s] * self.M[op][m][s][y]
+            for (op, m, s), value in self.column_index[y].items():
+                M[y] += h_op_r_j_r_s[op] * self.lambdas[m] * r_s_tensor[s] * value
                 # possible savings above: if we could "group" the above list items by op, then could factor out h_op.
                 # not sure how significant this would be---will there be one witness item w[y] and one `op`, for which
                 # op(w[y], s) shows up in a constraint for many different s's and multiple (say, more than one) m's?
