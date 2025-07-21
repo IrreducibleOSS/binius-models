@@ -15,7 +15,6 @@ class Verifier(Generic[F]):
         self.prover = prover
 
     def _evaluate_h_op(self, r_zhat_prime: F, r_j: list[F], r_s: list[F]) -> dict[ShiftOp, F]:
-        # to figure out. whether and how we can gain by returning all 3 of these at once.
         l_tilde = univariate_expand(self.field, r_zhat_prime)
         # now comes the hard part!
         s = [self.field.one()] * 64
@@ -24,6 +23,18 @@ class Verifier(Generic[F]):
         s_transpose_prime = [self.field.zero()] * 64
         a = [self.field.zero()] * 64
         j_product = self.field.one()
+        # see me for explanation of the below loop. for each op, the goal is to compute shift−indₒₚ(i, rⱼ, rₛ) for ALL i
+        # the way to unpack what i'm doing is to look at the expressions for sₖ₊₁ in terms of sₖ in the writeup, and
+        # imagine i FIXED to 0 and FIXED to 1. for each value i ∈ {0, 1} the polynomial expression in terms of (i, j, s)
+        # simplifies---to something just in terms of j and s---and that's what controls how sₖ₊₁ relates to sₖ,
+        # both in the top half of the former (i.e., the i = 0 case) and the bottom half (the i = 1 case).
+        # the "transpose" thing is tricky. the point is that shift−indₛₗₗ(i, j, s) = shift−indₛᵣₗ(j, i, s) (see paper).
+        # so if you unroll that, what we really want to do is compute s̃₆(rⱼ, i, rₛ) for each i ∈ {0, … , 63}.
+        # so again the principle is the same, except now we need to collapse j to 0 and 1, in order to see what to do.
+        # i have optimized this quite carefully---for both s and s_transpose, 6 mults per iteration of the hot loop.
+        # just one multiplication per iteration in the case of a, and finally no space overhead during the hot loop.
+        # a few expressions in r_j[k] and r_s[k] need to be memoized per iteration of the outer loop (log times).
+        # i would be surprised if one could do materially better than this.
         for k in range(6):
             # precompute some common subexpressions that we are going to re-use.
             both = r_j[k] * r_s[k]  # jₖ ⋅ sₖ

@@ -23,7 +23,7 @@ class Prover(Generic[F]):
         self.b = [0] * (1 << constraint_system.l_and)
         self.c = [0] * (1 << constraint_system.l_and)
 
-        # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index"
+        # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index".
         # the a, b, c are just as in the paper, and are computed in the same way as there (by shifting and accumulating)
         # the column index is an auxiliary data structure which will be used to speed up the sumcheck's first phase.
         # the point is to store, for each value y ∈ {0, … , n_{words} – 1} indexing into the witness,
