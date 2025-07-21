@@ -23,7 +23,7 @@ class Prover(Generic[F]):
         self.b = [0] * (1 << constraint_system.l_and)
         self.c = [0] * (1 << constraint_system.l_and)
 
-        # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index"
+        # in one pass over the constraint system, both accumulate our a, b, c values and set up the "column index".
         # the a, b, c are just as in the paper, and are computed in the same way as there (by shifting and accumulating)
         # the column index is an auxiliary data structure which will be used to speed up the sumcheck's first phase.
         # the point is to store, for each value y ∈ {0, … , n_{words} – 1} indexing into the witness,
@@ -229,6 +229,13 @@ class Prover(Generic[F]):
         for y in range(1 << self.constraint_system.l_words):
             for op, m, s in self.column_index[y]:
                 M[y] += h_op_r_j_r_s[op] * self.lambdas[m] * r_s_tensor[s] * self.M[op][m][s][y]
+                # possible savings above: if we could "group" the above list items by op, then could factor out h_op.
+                # not sure how significant this would be---will there be one witness item w[y] and one `op`, for which
+                # op(w[y], s) shows up in a constraint for many different s's and multiple (say, more than one) m's?
+                # i.e., will you shift the same word in the same direction, but for many different shift amounts?
+                # if so, then this might be worth it---wouldn't be hard to re-express the column index this way.
+                # seems a bit implausible, but who knows---and the effort of doing this optimization would be quite low.
+                # instead of a flat list of (op, m, s)s per y, we would have 3 lists, grouped by `op`. revisit this!
 
         multilinears = [w_r_j, M]
         composition = Polynomial(2, {(1, 1): self.field.one()})

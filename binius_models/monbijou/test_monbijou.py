@@ -67,8 +67,8 @@ def test_good():
     # some remarks. right now, we are NOT actually checking whether the witness satisfies the constraint system!
     # actually, that will be the job of the univariate skip. at the end of that, the verifier will be assured that
     # f(Ẑ, X) vanishes identically on D × B_{ℓ_{and}}---and so satisfies the constraint system---PENDING correctness
-    # of α_a, α_b and α_c, which claims will be nondeterministically supplied by the prover to the verifier.
-    # thus the job of the skip reduction is NOT really to check anything about constraint satisfaction, but rather to
+    # of α_a, α_b and α_c, claims which will be nondeterministically supplied by the prover at the end of the skip.
+    # thus the job of the shift reduction is NOT really to check anything about constraint satisfaction, but rather to
     # check whether claimed evaluations α_a, α_b and α_c of â(Ẑ, X), b̂(Ẑ, X), and ĉ(Ẑ, X) at r'_ẑ, r'_x are good.
 
     verifier = Verifier(GHASHElem, constraint_system, prover)
