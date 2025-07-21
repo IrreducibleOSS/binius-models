@@ -46,7 +46,7 @@ class Prover(Generic[F]):
                 self.c[i] ^= op(self.witness[j], s)
                 self.column_index[j].add((op, "c", s))
 
-        # assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
+        assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
     def _directly_evaluate(self, r_zhat_prime, r_x_prime):
         # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
