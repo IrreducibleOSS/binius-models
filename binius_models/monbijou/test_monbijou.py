@@ -7,49 +7,54 @@ from .constraint_system import ConstraintSystem, ShiftOp
 from .prover import Prover
 from .verifier import Verifier
 
-constraint_system = ConstraintSystem(  # a mock constraint system, hardcoded for now
-    l_and=3,
-    l_words=6,
+# this is a silly, dummy constraint system, that basically asserts that ⋀ᵢ₌₀⁷ w[i] << i == w[15] ~>> 8.
+# it puts the first 8 words into a tree of ANDs, shifting each thing by the appropriate amount.
+# the point is to rig up something that is not completely trivial, but which I can hand-enforce.
+# note how each list of length 1. we are only including one thing (and not an XOR of things) in each AND operand.
+# you can definitely modify this if you want, so that the lists are of length more than one.
+constraint_system = ConstraintSystem(
+    l_and=3,  # 8 constraints
+    l_words=4,  # witness length is 16
     and_constraints=[
-        (  # (w[2] ~>> 5 ^ w[5] >> 5) & w[10] << 55 == w[63]---just a random constraint that I can make hold manually
-            [(2, ShiftOp.SRA, 5), (5, ShiftOp.SRL, 5)],
-            [(10, ShiftOp.SLL, 55)],
-            [(63, ShiftOp.SLL, 0)],
+        (  # w[0] << 0 & w[1] << 1 == w[8]
+            [(0, ShiftOp.SLL, 0)],
+            [(1, ShiftOp.SLL, 1)],
+            [(8, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[2] << 2 & w[3] << 3 == w[9]
+            [(2, ShiftOp.SLL, 2)],
+            [(3, ShiftOp.SLL, 3)],
+            [(9, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[4] << 4 & w[5] << 5 == w[10]
+            [(4, ShiftOp.SLL, 4)],
+            [(5, ShiftOp.SLL, 5)],
+            [(10, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[6] << 6 & w[7] << 7 == w[11]
+            [(6, ShiftOp.SLL, 6)],
+            [(7, ShiftOp.SLL, 7)],
+            [(11, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[8] << 0 & w[9] << 0 == w[12]
+            [(8, ShiftOp.SLL, 0)],
+            [(9, ShiftOp.SLL, 0)],
+            [(12, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[10] << 0 & w[11] << 0 == w[13]
+            [(10, ShiftOp.SLL, 0)],
+            [(11, ShiftOp.SLL, 0)],
+            [(13, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[12] << 0 & w[13] << 0 == w[14]
+            [(12, ShiftOp.SLL, 0)],
+            [(13, ShiftOp.SLL, 0)],
+            [(14, ShiftOp.SLL, 0)],
         ),
-        (  # trivial constraint, since it insists that SOMETHING & SOMETHING = SOMETHING. this imposes no real condition
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
-            [(7, ShiftOp.SLL, 10), (14, ShiftOp.SRL, 20), (21, ShiftOp.SRA, 30), (28, ShiftOp.SLL, 40)],
+        (  # w[14] & w[14] == w[15] ~>> 8
+            [(14, ShiftOp.SLL, 0)],
+            [(14, ShiftOp.SLL, 0)],
+            [(15, ShiftOp.SRA, 8)],
         ),
     ],
 )
