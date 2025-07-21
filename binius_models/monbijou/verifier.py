@@ -58,15 +58,7 @@ class Verifier(Generic[F]):
             ShiftOp.SRA: sra,
         }
 
-    def verify_shift_reduction(self):
-        r_zhat_prime = self.field.random()
-        r_x_prime = [self.field.random() for _ in range(self.constraint_system.l_and)]
-
-        # ask for the below quantities directly from the prover.
-        # in real life, these will be the final outputs of univariate skip reduction, and will come from that.
-        (alpha_a, alpha_b, alpha_c) = self.prover._directly_evaluate(r_zhat_prime, r_x_prime)
-
-        # begin actual verification of shift reduction
+    def verify_shift_reduction(self, r_zhat_prime: F, r_x_prime: list[F], alpha_a: F, alpha_b: F, alpha_c: F) -> None:
         (lambda_a, lambda_b, lambda_c) = (self.field.random(), self.field.random(), self.field.random())
         claim = lambda_a * alpha_a + lambda_b * alpha_b + lambda_c * alpha_c
 
