@@ -108,6 +108,10 @@ class Prover(Generic[F]):
             for y, op, s in I_c:
                 self.column_index[y][(op, "c", s)] += r_x_tensor[x]
 
+        # these g's are actually surprisingly large. we have 9 × 64 × 64 field elements to store; this is ≈≈ 576 KiB.
+        # this is about as much memory as we are liable to need in the second phase, for n_{words} == 15, so it seems ok
+        # and moreover, we will do better than this _at best_ by a factor of 3, in view of how the sumcheck below goes.
+        # optimizing this seems not simple, and not sure if we need to go down that path or not.
         g = {  # outer index j, inner index s
             ShiftOp.SLL: {
                 "a": [[self.field.zero()] * 64 for _ in range(64)],
