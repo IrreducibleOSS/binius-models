@@ -7,10 +7,10 @@ from .constraint_system import ConstraintSystem, ShiftOp
 from .prover import Prover
 from .verifier import Verifier
 
-# this is a silly, dummy constraint system, that basically asserts that ⋀ᵢ₌₀⁷ w[i] << i == w[15] ~>> 8.
+# this is a silly, dummy constraint system, that basically asserts that (⋀ᵢ₌₀⁷ w[i] << i) >> 5 == w[15] ~>> 2.
 # it puts the first 8 words into a tree of ANDs, shifting each thing by the appropriate amount.
 # the point is to rig up something that is not completely trivial, but which I can hand-enforce.
-# note how each list of length 1. we are only including one thing (and not an XOR of things) in each AND operand.
+# note how each list is of length 1. we are only including one thing (and not an XOR of things) in each AND operand.
 # you can definitely modify this if you want, so that the lists are of length more than one.
 constraint_system = ConstraintSystem(
     l_and=3,  # 8 constraints
@@ -51,18 +51,27 @@ constraint_system = ConstraintSystem(
             [(13, ShiftOp.SLL, 0)],
             [(14, ShiftOp.SLL, 0)],
         ),
-        (  # w[14] & w[14] == w[15] ~>> 8
-            [(14, ShiftOp.SLL, 0)],
-            [(14, ShiftOp.SLL, 0)],
-            [(15, ShiftOp.SRA, 8)],
+        (  # w[14] >> 5 & w[14] >> 5 == w[15] ~>> 2
+            [(14, ShiftOp.SRL, 5)],
+            [(14, ShiftOp.SRL, 5)],
+            [(15, ShiftOp.SRA, 2)],
         ),
     ],
 )
 
+mask = (1 << 64) - 1
+witness = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
+witness[8] = witness[0] << 0 & witness[1] << 1 & mask
+witness[9] = witness[2] << 2 & witness[3] << 3 & mask
+witness[10] = witness[4] << 4 & witness[5] << 5 & mask
+witness[11] = witness[6] << 6 & witness[7] << 7 & mask
+witness[12] = witness[8] & witness[9]
+witness[13] = witness[10] & witness[11]
+witness[14] = witness[12] & witness[13]
+witness[15] = witness[14] >> 3
+
 
 def test_good():
-    witness = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
-    witness[63] = (ShiftOp.SRA(witness[2], 5) ^ ShiftOp.SRL(witness[5], 5)) & ShiftOp.SLL(witness[10], 55)
     prover = Prover(GHASHElem, constraint_system, witness)
 
     # the below block of code "simulates" the univariate skip.
@@ -81,8 +90,6 @@ def test_good():
 
 
 def test_bad():
-    witness = [random.randrange(1 << 64) for _ in range(1 << constraint_system.l_words)]
-    witness[63] = (ShiftOp.SRA(witness[2], 5) ^ ShiftOp.SRL(witness[5], 5)) & ShiftOp.SLL(witness[10], 55)
     prover = Prover(GHASHElem, constraint_system, witness)
 
     r_zhat_prime = GHASHElem.random()

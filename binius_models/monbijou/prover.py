@@ -30,7 +30,7 @@ class Prover(Generic[F]):
         # whose keys are those (op, m, s)s for which the yᵗʰ column of M_{op, m}(X, y, s) is not identically zero.
         # the VALUE at self.column_index[y][(op, m, s)] will ultimately be Mₒₚ(r'ₓ, Y, s). see below for computation.
         # these will be exactly the (op, m, s) for which the prover needs to update the "gacc" accumulator; see below.
-        self.column_index: list[set[int]] = [{} for _ in range(1 << constraint_system.l_words)]
+        self.column_index: list[dict[tuple[ShiftOp, str, int], F]] = [{} for _ in range(1 << constraint_system.l_words)]
         for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
             for j, op, s in I_a:
                 self.a[i] ^= op(self.witness[j], s)
@@ -48,7 +48,7 @@ class Prover(Generic[F]):
         # technically, the constraint-system-dependent part, the witness-dependent part, and the runtime-dependent part
         # could / should all be broken apart, for exactness. i don't know that it's necessary to do that for now?
 
-        # assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
+        assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
     def _directly_evaluate(self, r_zhat_prime, r_x_prime):
         # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
