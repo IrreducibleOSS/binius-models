@@ -14,7 +14,7 @@ class Verifier(Generic[F]):
         self.constraint_system = constraint_system
         self.prover = prover
 
-    def _evaluate_h_op(self, r_zhat_prime: F, r_j: list[F], r_s: list[F]) -> F:
+    def _evaluate_h_op(self, r_zhat_prime: F, r_j: list[F], r_s: list[F]) -> dict[ShiftOp, F]:
         # to figure out. whether and how we can gain by returning all 3 of these at once.
         l_tilde = univariate_expand(self.field, r_zhat_prime)
         # now comes the hard part!
@@ -46,12 +46,12 @@ class Verifier(Generic[F]):
                 a[1 << k | i] = r_s[k] + (self.field.one() + r_s[k]) * a[i]
                 a[i] += a[1 << k | i] - r_s[k]  # this is a bit of a trick; wastes an add, but saves a write to a temp
             j_product *= r_j[k]
-        sll = sum((l_tilde[i] * s_transpose[i] for i in range(64)), self.field.zero())
-        srl = sum((l_tilde[i] * s[i] for i in range(64)), self.field.zero())
+        sll: F = sum((l_tilde[i] * s_transpose[i] for i in range(64)), self.field.zero())
+        srl: F = sum((l_tilde[i] * s[i] for i in range(64)), self.field.zero())
         # sra == ∑ᵢ L̃(i) ⋅ (srlᵢ + ∏ₖ rⱼ[k] ⋅ aᵢ)
         #     == ∑ᵢ L̃(i) ⋅ srlᵢ + ∏ₖ rⱼ[k] ⋅ [ ∑ᵢ L̃(i) ⋅ aᵢ ]
         #     == srl + ∏ₖ rⱼ[k] ⋅ [ ∑ᵢ L̃(i) ⋅ aᵢ ]
-        sra = srl + j_product * sum((l_tilde[i] * a[i] for i in range(64)), self.field.zero())
+        sra: F = srl + j_product * sum((l_tilde[i] * a[i] for i in range(64)), self.field.zero())
         return {
             ShiftOp.SLL: sll,
             ShiftOp.SRL: srl,
