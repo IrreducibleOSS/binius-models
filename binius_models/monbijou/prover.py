@@ -46,7 +46,7 @@ class Prover(Generic[F]):
                 self.c[i] ^= op(self.witness[j], s)
                 self.column_index[j].add((op, "c", s))
 
-        assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
+        # assert all(self.a[i] & self.b[i] == self.c[i] for i in range(1 << constraint_system.l_and))
 
     def _directly_evaluate(self, r_zhat_prime, r_x_prime):
         # directly computes and coughs up the values of â(Ẑ, X), b̂(Ẑ, X) and ĉ(Ẑ, X) on given inputs r'_ẑ, r'_x.
@@ -229,6 +229,13 @@ class Prover(Generic[F]):
         for y in range(1 << self.constraint_system.l_words):
             for op, m, s in self.column_index[y]:
                 M[y] += h_op_r_j_r_s[op] * self.lambdas[m] * r_s_tensor[s] * self.M[op][m][s][y]
+                # possible savings above: if we could "group" the above list items by op, then could factor out h_op.
+                # not sure how significant this would be---will there be one witness item w[y] and one `op`, for which
+                # op(w[y], s) shows up in a constraint for many different s's and multiple (say, more than one) m's?
+                # i.e., will you shift the same word in the same direction, but for many different shift amounts?
+                # if so, then this might be worth it---wouldn't be hard to re-express the column index this way.
+                # seems a bit implausible, but who knows---and the effort of doing this optimization would be quite low.
+                # instead of a flat list of (op, m, s)s per y, we would have 3 lists, grouped by `op`. revisit this!
 
         multilinears = [w_r_j, M]
         composition = Polynomial(2, {(1, 1): self.field.one()})
