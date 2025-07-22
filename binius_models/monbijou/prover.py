@@ -96,17 +96,17 @@ class Prover(Generic[F]):
         for s in range(1, 64):
             h[ShiftOp.SRA][63][s] += h[ShiftOp.SRA][63][s - 1]
 
-        r_x_tensor = tensor_expand(self.field, self.r_x_prime, self.constraint_system.l_and)
+        r_x_prime_tensor = tensor_expand(self.field, self.r_x_prime, self.constraint_system.l_and)
         # for each y ∈ {0, … , n_{words} – 1}, for each op × m × s for which Mₒₚ(X, y, s) is not completely empty,
         # we are going to accumulate Mₒₚ(r'ₓ, Y, s) into column_index[y][(op, m, s)]. since nonempty, it will be nonzero
         # to do this we just need to add ⊗(r'ₓ)[x] to column_index[y][(op, m, s)] for each x for which Mₒₚ(x, y, s) = 1.
         for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
             for y, op, s in I_a:
-                self.column_index[y][(op, "a", s)] += r_x_tensor[x]
+                self.column_index[y][(op, "a", s)] += r_x_prime_tensor[x]
             for y, op, s in I_b:
-                self.column_index[y][(op, "b", s)] += r_x_tensor[x]
+                self.column_index[y][(op, "b", s)] += r_x_prime_tensor[x]
             for y, op, s in I_c:
-                self.column_index[y][(op, "c", s)] += r_x_tensor[x]
+                self.column_index[y][(op, "c", s)] += r_x_prime_tensor[x]
 
         # these g's are actually surprisingly large. we have 9 × 64 × 64 field elements to store; this is ≈≈ 576 KiB.
         # this is about as much memory as we are liable to need in the second phase, for n_{words} == 15, so it seems ok
