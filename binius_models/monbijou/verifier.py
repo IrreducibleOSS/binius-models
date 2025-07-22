@@ -130,13 +130,13 @@ class Verifier(Generic[F]):
                 "c": self.field.zero(),
             },
         }
-        for i, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
-            for j, op, s in I_a:
-                M[op]["a"] += r_x_prime_tensor[i] * r_y_tensor[j] * r_s_tensor[s]
-            for j, op, s in I_b:
-                M[op]["b"] += r_x_prime_tensor[i] * r_y_tensor[j] * r_s_tensor[s]
-            for j, op, s in I_c:
-                M[op]["c"] += r_x_prime_tensor[i] * r_y_tensor[j] * r_s_tensor[s]
+        for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
+            for y, op, s in I_a:
+                M[op]["a"] += r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
+            for y, op, s in I_b:
+                M[op]["b"] += r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
+            for y, op, s in I_c:
+                M[op]["c"] += r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
 
         h_op = self._evaluate_h_op(r_zhat_prime, r_j, r_s)
         for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]:

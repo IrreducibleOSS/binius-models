@@ -31,16 +31,16 @@ class Prover(Generic[F]):
         # the VALUE at self.column_index[y][(op, m, s)] will ultimately be Mₒₚ(r'ₓ, Y, s). see below for computation.
         # these will be exactly the (op, m, s) for which the prover needs to update the "gacc" accumulator; see below.
         self.column_index: list[dict[tuple[ShiftOp, str, int], F]] = [{} for _ in range(1 << constraint_system.l_words)]
-        for i, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
-            for j, op, s in I_a:
-                self.a[i] ^= op(self.witness[j], s)
-                self.column_index[j][(op, "a", s)] = self.field.zero()
-            for j, op, s in I_b:
-                self.b[i] ^= op(self.witness[j], s)
-                self.column_index[j][(op, "b", s)] = self.field.zero()
-            for j, op, s in I_c:
-                self.c[i] ^= op(self.witness[j], s)
-                self.column_index[j][(op, "c", s)] = self.field.zero()
+        for x, (I_a, I_b, I_c) in enumerate(constraint_system.and_constraints):
+            for y, op, s in I_a:
+                self.a[x] ^= op(self.witness[y], s)
+                self.column_index[y][(op, "a", s)] = self.field.zero()
+            for y, op, s in I_b:
+                self.b[x] ^= op(self.witness[y], s)
+                self.column_index[y][(op, "b", s)] = self.field.zero()
+            for y, op, s in I_c:
+                self.c[x] ^= op(self.witness[y], s)
+                self.column_index[y][(op, "c", s)] = self.field.zero()
         # note: for each y, the KEYS (m, op, s) of column_index[y] will only depend on the constraint system, while
         # the VALUES will ultimately depend on quantities unknown till runtime, namely r'ₓ (though not on the witness!).
         # thus these need to be purged if you ever want to run the same prover twice, even if the witness doesn't change
@@ -134,13 +134,12 @@ class Prover(Generic[F]):
             for j in range(64):
                 # todo: there is a bitwise / simd-ish vibe here; revisit whether there is some clever memory stuff
                 if w_y & 1:  # we only want to read the witness once. this seems to be the way to do it
+                    # note that y, and so likewise the items ((op, m, s), value) below, stay constant even as j varies.
+                    # thus the innermost loop down below and the loop over j above could be interchanged.
+                    # for each j, we are adding the same thing to the same places if w[y] >> j == 1, just with j changed
+                    # the written approach has the benefit that we only need to read the witness exactly once
                     for (op, m, s), value in self.column_index[y].items():
                         g[op][m][j][s] += value
-                        # the alternative is to simply loop over all op, m, and s, and do the above line for every one.
-                        # that would be perfectly correct, since when `self.column_index[y] = []`, M[op][m][s][y] = 0.
-                        # it would also be more of a regular computation (simd stuff possible? not sure.).
-                        # but all signs point to that being a massive number of adds, enough to make it much slower.
-                        # heuristically (depending on the constraint system), this should save on adds by 64x at least.
                 w_y >>= 1
 
         # now sum over m, consolidate all g's into the "a" accumulator (just as a place to keep them, arbitrary choice)
