@@ -2,8 +2,8 @@ import random  # just to mock the verifier's queries; not cryptographically secu
 from typing import Generic, TypeVar
 
 from ..finite_fields.tower import BinaryTowerFieldElem
+from ..ips.polynomial import Polynomial
 from ..ips.sumcheck import Sumcheck
-from ..ips.utils import Polynomial
 from ..ntt.additive_ntt import AdditiveNTT
 
 F = TypeVar("F", bound=BinaryTowerFieldElem)
@@ -23,8 +23,8 @@ class VectorOracle(Generic[F]):
 class SumcheckClaim(Generic[F]):  # each ring-switching instance _outputs_ / reduces to one of these. two multilinears
     def __init__(self, field: type[F], multilinear: list[F], folded_eq_indicator: list[F], index: int) -> None:
         # assert len(multilinears[0]) == len(multilinears[1])  # will do so internally
-        composition = Polynomial(2, {tuple([1, 1]): field.one()})  # simple product of two multilinears
-        self.sumcheck = Sumcheck([multilinear, folded_eq_indicator], composition, False)
+        composition = Polynomial(field, 2, {tuple([1, 1]): field.one()})  # simple product of two multilinears
+        self.sumcheck = Sumcheck(field, [multilinear, folded_eq_indicator], composition, False)
         self.value = sum((a * eq for (a, eq) in zip(multilinear, folded_eq_indicator)), field.zero())
         # presumably in real life we will have this value sitting around somewhere, as opposed to having to compute it.
         self.next = index + 1
