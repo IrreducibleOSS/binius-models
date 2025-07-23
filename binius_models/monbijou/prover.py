@@ -1,10 +1,10 @@
 from typing import Generic, TypeVar
 
 from ..finite_fields.finite_field import FiniteFieldElem
+from ..finite_fields.utils import tensor_expand, univariate_expand
+from ..ips.polynomial import Polynomial
 from ..ips.sumcheck import Sumcheck
-from ..ips.utils import Polynomial
 from .constraint_system import ConstraintSystem, ShiftOp
-from .utils import tensor_expand, univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
@@ -172,6 +172,7 @@ class Prover(Generic[F]):
             sum(g[ShiftOp.SRA]["a"], []),
         ]
         composition = Polynomial(  # ∑ₒₚ hₒₚ ⋅ gₒₚ
+            self.field,
             6,
             {
                 (1, 1, 0, 0, 0, 0): self.field.one(),
@@ -179,7 +180,7 @@ class Prover(Generic[F]):
                 (0, 0, 0, 0, 1, 1): self.field.one(),
             },
         )
-        self.first_phase_sumcheck = Sumcheck(multilinears, composition)
+        self.first_phase_sumcheck = Sumcheck(self.field, multilinears, composition)
 
     def initiate_second_phase(self):
         # assert: self.first_phase_sumcheck.round == 12
@@ -224,5 +225,5 @@ class Prover(Generic[F]):
                 # instead of a flat list of (op, m, s)s per y, we would have 3 lists, grouped by `op`. revisit this!
 
         multilinears = [w_r_j, M]
-        composition = Polynomial(2, {(1, 1): self.field.one()})
-        self.second_phase_sumcheck = Sumcheck(multilinears, composition)
+        composition = Polynomial(self.field, 2, {(1, 1): self.field.one()})
+        self.second_phase_sumcheck = Sumcheck(self.field, multilinears, composition)

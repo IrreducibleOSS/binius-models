@@ -1,9 +1,9 @@
 from typing import Generic, TypeVar
 
 from ..finite_fields.finite_field import FiniteFieldElem
+from ..finite_fields.utils import tensor_expand, univariate_expand
 from .constraint_system import ConstraintSystem, ShiftOp
 from .prover import Prover
-from .utils import tensor_expand, univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
