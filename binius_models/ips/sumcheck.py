@@ -2,11 +2,49 @@ import math
 from typing import Generic, TypeVar
 
 from binius_models.finite_fields.finite_field import FiniteFieldElem
-from binius_models.ips.utils import Polynomial, compute_switchover, linearly_interpolate
+from binius_models.ips.polynomial import Polynomial
 
 from ..utils.utils import is_power_of_two
 
 F = TypeVar("F", bound=FiniteFieldElem)
+
+
+def compute_switchover(v: int, d: int, ratio: int) -> int:
+    # returns: at which point should we switch from b × e muls, plus tensor expansion, to classical-style folding?
+    # parameter `ratio`: what is the cost of an e × e mult, relative to that of a b × e?
+
+    # in the simplest case len(multilinears) == 1 and subfield size 1 bit (and ignoring XORs), the best is at v/2.
+    # more generally, allowing len(multilinears) == d you can calculate that the breakeven point happens at exactly
+    # (log(d) + v) / 2. why? for each round, the cost of self.receive_challenge is:
+    # - if round < switchover: exactly 2ʳᵒᵘⁿᵈ e × e mults.
+    # - if round ≥ switchover, exactly d ⋅ 2ᵛ⁻ʳᵒᵘⁿᵈ e × e mults.
+    # thus we're interested in the smallest r for which d ⋅ 2ᵛ⁻ʳ ≤ 2ʳ first becomes true.
+    # taking logs of both sides, we see the inequality log(d) + v ≤ 2 ⋅ r, and we're done.
+
+    # it becomes more complicated if we want to count the cost of b × e mults---
+    # as we might, say, as soon as the field size of the polys is > 1 bit, or if we care about the cost of XORs.
+    # of course the higher the cost of b × es, the earlier we will want the switchover to actually happen.
+    # indeed, now counting b × es, the total cost of each round is 2ᵛ⁻ʳᵒᵘⁿᵈ⁻¹ ⋅ deg polynomial evaluations,
+    # where write `deg` for the total degree of the composition polynomial (it equals d when it's just a product),
+    # (this cost is there regardless of pre-switchover or not), PLUS, in addition:
+    # - if round < switchover: d ⋅ 2ᵛ b × e (compute folds on the fly) + 2ʳᵒᵘⁿᵈ e × e (tensor expand)
+    # - if round > switchover: d ⋅ 2ᵛ⁻ʳᵒᵘⁿᵈ e × e (classical folding)
+    # - if round == switchover: d ⋅ 2ᵛ b × e + d ⋅ 2ᵛ⁻ʳᵒᵘⁿᵈ e × e (on-the-fly and fold).
+    # when you work it out, for arbitrary switchover r ∈ {0, ..., v - 1}, the total cost across all rounds becomes:
+    # f(r) :=
+    # (2ʳ − 1) e × e (total work of tensor expansion, up to but excluding the switchover round)
+    # + d ⋅ r ⋅ 2ᵛ b × e (total work of only-the-fly folds, including switchover round, but excluding 0th round)
+    # + d ⋅ (2ᵛ⁻ʳ⁺¹ - 2) e × e (total work of classical folds, including the switchover round and following rounds)
+    # so our goal is to choose r ∈ {0, ..., v - 1} so as to minimze f(r), which is a straightforward calculation.
+    # though the minimal value in practice will depend on the relative cost of b × es versus e × es, as well as d.
+    # you can see that we have an amount of b × es which increases linearly in r (penalty for delaying the switch),
+    # as well as the familiar exponentially increasing and decreasing costs in e × es of tensor and folding, resp.
+    return min(range(v), key=lambda r: ((1 << r) - 1) * ratio + d * r * (1 << v) + d * ((1 << v - r + 1) - 2) * ratio)
+
+
+# Corresponds to `binius_core::polynomial::extrapolate_line()`.
+def linearly_interpolate(points: tuple[F, F], r: F) -> F:
+    return points[0] + (points[1] - points[0]) * r
 
 
 class Sumcheck(Generic[F]):
@@ -20,11 +58,14 @@ class Sumcheck(Generic[F]):
     each is given as a list of coefficients in the Lagrange basis, where these coefficients are 𝔽₂-elements
     """
 
-    def __init__(self, multilinears: list[list[F]], composition: Polynomial[F], high_to_low: bool = False) -> None:
+    def __init__(
+        self, field: type[F], multilinears: list[list[F]], composition: Polynomial[F], high_to_low: bool = False
+    ) -> None:
         length = len(multilinears[0])
         assert is_power_of_two(length)
         assert all(len(multilinear) == length for multilinear in multilinears)  # multilinears are of equal lengths
         assert composition.variables == len(multilinears)  # number of multilinears is same as num vars of composition
+        self.field = field
         self.v = int(math.log2(length))
         self.multilinears = multilinears
         self.composition = composition
@@ -33,7 +74,6 @@ class Sumcheck(Generic[F]):
         # e.g., in fribinius, etc., we need them. go ahead and memoize them here, for use by consuming applications.
         self.round = 0
         self.switchover = compute_switchover(self.v, composition.degree, 100)
-        self.field = type(multilinears[0][0])
         self.tensor = [self.field.one()] + [self.field.zero()] * ((1 << self.switchover) - 1)
         self._precompute_barycentric_weights()
         self.high_to_low = high_to_low
