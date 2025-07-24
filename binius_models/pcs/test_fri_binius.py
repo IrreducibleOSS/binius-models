@@ -1,6 +1,12 @@
 import pytest
 
-from .fri_binius import Elem128b, FRIBinius
+from binius_models.finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
+
+from .fri_binius import FRIBinius
+
+
+class Elem128b(BinaryTowerFieldElem):
+    field = FanPaarTowerField(7)
 
 
 @pytest.mark.parametrize("var, log_inv_rate", [(4, 1), (5, 2)])
@@ -29,7 +35,7 @@ def test_fri_binius(var, log_inv_rate):
         challenge = Elem128b.random()
         fri_binius.receive_challenge(challenge)
         s = fri_binius.sumcheck.interpolate(evaluations, challenge)
-        eq_r_rprime *= (evaluation_point[i] + one) * (challenge + one) + evaluation_point[i] * challenge
+        eq_r_rprime *= one + evaluation_point[i] + challenge  # += eq * eval + eq * challenge
     c = fri_binius.finalize()
     assert s == c * eq_r_rprime
 
@@ -65,7 +71,7 @@ def test_high_to_low(var, log_inv_rate):
         fri_binius.receive_challenge(challenge)
         s = fri_binius.sumcheck.interpolate(evaluations, challenge)
         opposite = fri_binius.var - 1 - i
-        eq_r_rprime *= (evaluation_point[opposite] + one) * (challenge + one) + evaluation_point[opposite] * challenge
+        eq_r_rprime *= one + evaluation_point[opposite] + challenge
         # everything is the same test-wise except for `high_to_low = True` above and the above two lines.
     c = fri_binius.finalize()
     assert s == c * eq_r_rprime

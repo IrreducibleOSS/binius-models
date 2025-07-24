@@ -13,7 +13,7 @@ from binius_models.hashes.vision.utils import (
     transpose,
 )
 
-E = TypeVar("E", bound="BinaryTowerFieldElem")
+F = TypeVar("F", bound="BinaryTowerFieldElem")
 
 
 class Elem(BinaryTowerFieldElem):
