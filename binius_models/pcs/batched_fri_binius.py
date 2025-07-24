@@ -28,6 +28,7 @@ class SumcheckClaim(Generic[F]):  # each ring-switching instance _outputs_ / red
         self.value = sum((a * eq for (a, eq) in zip(multilinear, folded_eq_indicator)), field.zero())
         # presumably in real life we will have this value sitting around somewhere, as opposed to having to compute it.
         self.next = index + 1
+        self.evaluation = field.zero()
 
 
 class SumcheckManager(Generic[F]):  # wraps a bunch of individual sumcheck claims.
@@ -39,7 +40,7 @@ class SumcheckManager(Generic[F]):  # wraps a bunch of individual sumcheck claim
     def initialize(self, batching_randomness: F) -> None:
         self.batching_randomness = batching_randomness
 
-    def advance_state(self):
+    def advance_state(self) -> list[F]:
         round_polynomial = [self.field.zero()] * 2  # composition degree == 2; we are going to omit 0 as usual
         randomness = self.field.one()
         for claim in sorted(self.claims, key=lambda claim: claim.sumcheck.v):
@@ -72,7 +73,7 @@ class BatchedFRIBinius(Generic[F]):
 
         self.additive_ntt = AdditiveNTT(field, self.var, log_inv_rate)
         self.challenges: list[F] = []  # memoize the round challenges we receive from the verifier...
-        self.oracle = VectorOracle()
+        self.oracle: VectorOracle[F] = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
 
         # we are going to prepare the way for the verifier with a bit of bookkeeping trickiness.
