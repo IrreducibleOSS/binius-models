@@ -63,7 +63,7 @@ class Vision(ABC, Generic[F]):
 
         x_inv = self.elem.zero() if x == self.elem.zero() else x.inverse()
 
-        result = poly[-1]
+        result: F = poly[-1]
         for j in range(len(poly) - 1):
             result += poly[j] * x_inv
             x_inv **= 2  # does one squaring more than necessary

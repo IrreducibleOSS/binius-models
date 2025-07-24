@@ -47,10 +47,10 @@ class FiniteFieldElem(Generic[R]):
         return self.__class__(self.field.pow(self.value, exponent))
 
     def __eq__(self, other) -> bool:
-        return self.value == other.value
+        return bool(self.value == other.value)
 
-    def __neq__(self, other):
-        return self.value != other.value
+    def __neq__(self, other) -> bool:
+        return bool(self.value != other.value)
 
     def __str__(self) -> str:
         return self.field.format_str(self.value)
@@ -62,7 +62,7 @@ class FiniteFieldElem(Generic[R]):
         return self.field.to_bytes(self.value)
 
     def is_zero(self) -> bool:
-        return self.value == self.field.zero()
+        return bool(self.value == self.field.zero())
 
     def __bool__(self) -> bool:
         return not self.is_zero()
