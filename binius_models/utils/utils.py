@@ -83,4 +83,4 @@ def factorize(n):
 
 
 def is_power_of_two(x: int) -> bool:
-    return x & (x - 1) == 0
+    return x > 0 and x & (x - 1) == 0

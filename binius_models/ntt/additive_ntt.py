@@ -1,10 +1,10 @@
 from math import ceil, log2
 from typing import Generic, TypeVar
 
-from ..finite_fields.tower import BinaryTowerFieldElem
+from ..finite_fields.finite_field import FiniteFieldElem
 from ..utils.utils import bit_reverse, bits_mask, is_bit_set, is_power_of_two
 
-F = TypeVar("F", bound=BinaryTowerFieldElem)
+F = TypeVar("F", bound=FiniteFieldElem)
 
 
 class AdditiveNTT(Generic[F]):
@@ -234,7 +234,6 @@ class GaoMateerBasis(AdditiveNTT[F]):
         self.constants[0][(1 << indeterminates_needed) - 1] = self.field(1 << (1 << indeterminates_needed - 1))
         for i in range((1 << indeterminates_needed) - 1, 0, -1):
             self.constants[0][i - 1] = self.constants[0][i].square() + self.constants[0][i]
-        self.constants[0] = self.constants[0][:initial_dimension]  # grab only what we need
         for i in range(1, self.max_log_h + skip_rounds):
             self.constants.append(self.constants[0][: initial_dimension - i])  # trivial, no computation needed
         self.constants = self.constants[skip_rounds:]

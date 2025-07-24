@@ -1,6 +1,12 @@
 import pytest
 
-from .batched_fri_binius import BatchedFRIBinius, Elem128b, SumcheckClaim
+from binius_models.finite_fields.tower import BinaryTowerFieldElem, FanPaarTowerField
+
+from .batched_fri_binius import BatchedFRIBinius, SumcheckClaim
+
+
+class Elem128b(BinaryTowerFieldElem):
+    field = FanPaarTowerField(7)
 
 
 @pytest.mark.parametrize("sizes, log_inv_rate", [((4,), 1), ((3, 2, 2, 1), 1), ((3, 3, 1), 1), ((6, 4, 4, 2, 1), 2)])
@@ -10,7 +16,7 @@ def test_batched_fri_binius(sizes, log_inv_rate):
         assert size > 0  # constant (0-variate) multilinears are not allowed.
         multilinear = [Elem128b.random() for _ in range(1 << size)]
         eq_mock = [Elem128b.random() for _ in range(1 << size)]  # let them both be random for now
-        claim = SumcheckClaim(multilinear, eq_mock, i)
+        claim = SumcheckClaim(Elem128b, multilinear, eq_mock, i)
         claims.append(claim)
 
     batched_fri_binius = BatchedFRIBinius(Elem128b, log_inv_rate, claims)
@@ -54,7 +60,7 @@ def test_batched_fri_binius(sizes, log_inv_rate):
             if claim.next < len(claims):
                 first = claims[claim.next].evaluation
                 claim.next = claims[claim.next].next  # skip the next guy!!!
-            claim.evaluation = (Elem128b.one() - challenge) * zeroth + challenge * first
+            claim.evaluation = zeroth + challenge * (first - zeroth)
             j = claim.next
         assert j == len(claims)  # debug assert; only for sanity; verifier doesn't actually need to check
 
