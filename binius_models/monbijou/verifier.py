@@ -8,6 +8,7 @@ from .utils import univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
+
 class Verifier(Generic[F]):
     def __init__(self, field: type[F], constraint_system: ConstraintSystem, prover: Prover[F]):
         self.field = field
@@ -104,21 +105,21 @@ class Verifier(Generic[F]):
                 * r_y_tensor[y]
                 for y in range(1 << self.constraint_system.l_words)
             ),
-            self.field.zero()
+            self.field.zero(),
         )
 
         # Evaluate the monster multilinear
         h_op = self._evaluate_h_op(r_zhat_prime, r_j, r_s)
 
         # Evaluate the matrix corresponding to each operand
-        def evaluate_m_matrix(operands: list[Operand]) -> F:
+        def evaluate_m_matrix(operands: tuple[Operand, ...]) -> F:
             return sum(
                 (
                     (h_op[op] * r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s])
                     for x, operand in enumerate(operands)
                     for y, op, s in operand
                 ),
-                self.field.zero()
+                self.field.zero(),
             )
 
         # Batch the operand matrix evaluations with lambda
@@ -127,7 +128,7 @@ class Verifier(Generic[F]):
                 (lambda_val**m_idx) * evaluate_m_matrix(operands)
                 for m_idx, operands in enumerate(zip(*self.constraint_system.and_constraints))
             ),
-            self.field.zero()
+            self.field.zero(),
         )
 
         assert claim == w_r_j_r_y * monster_eval  # just one check!

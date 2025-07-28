@@ -10,11 +10,13 @@ from .utils import univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
+
 @dataclass
 class Key:
     op: ShiftOp
     amount: int
     x_indices: list[int]
+
 
 # A Record is constructed for each operand.
 # A Record is a list with an item for each word.
@@ -25,6 +27,7 @@ class Key:
 # the constraints in which that shifted word is used.
 Record = list[list[Key]]
 MultilinearTriplet = dict[ShiftOp, list[F]]
+
 
 class Prover(Generic[F]):
     def __init__(
@@ -53,7 +56,7 @@ class Prover(Generic[F]):
 
         # Tensor of r_x_prime to be computed in first phase
         # and used in both phases
-        self.r_x_prime_tensor = []
+        self.r_x_prime_tensor: list[F] = []
 
         # Populate the a,b,c columns
         self.a = [0] * (1 << constraint_system.l_and)
@@ -132,7 +135,10 @@ class Prover(Generic[F]):
         # optimizing this seems not simple, and not sure if we need to go down that path or not.
         g: MultilinearTriplet = {
             op: [
-                sum(((self.lambda_val**m_idx) * triplet[op][k] for m_idx, triplet in enumerate(triplets)), self.field.zero())
+                sum(
+                    ((self.lambda_val**m_idx) * triplet[op][k] for m_idx, triplet in enumerate(triplets)),
+                    self.field.zero(),
+                )
                 for k in range(64 * 64)
             ]
             for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]
@@ -219,14 +225,17 @@ class Prover(Generic[F]):
         # # UNFLATTENED
         # def accumulate_keys(keys: list[Key]) -> F:
         #     return sum(
-        #         (h_op_r_j_r_s[op] * r_s_tensor[s] * self.accumulate_across_x(x_indices)
-        #          for op, s, x_indices in keys),
-        #         self.field.zero()
+        #         (h_op_r_j_r_s[op] * r_s_tensor[s] * self.accumulate_across_x(x_indices) for op, s, x_indices in keys),
+        #         self.field.zero(),
         #     )
 
         # M = [self.field.zero()] * (1 << self.constraint_system.l_words)
         # for y, (a_keys, b_keys, c_keys) in enumerate(zip(self.a_record, self.b_record, self.c_record)):
-        #     M[y] = accumulate_keys(a_keys) + self.lambda_val * accumulate_keys(b_keys) + self.lambda_val.square() * accumulate_keys(c_keys)
+        #     M[y] = (
+        #         accumulate_keys(a_keys)
+        #         + self.lambda_val * accumulate_keys(b_keys)
+        #         + self.lambda_val.square() * accumulate_keys(c_keys)
+        #     )
 
         # FLATTENED
         scalars = [self.field.zero()] * (3 * 3 * 64)
@@ -245,14 +254,15 @@ class Prover(Generic[F]):
         def accumulate_for_m_keys(keys: list[Key], m_idx: int) -> F:
             return sum(
                 (
-                    scalars[(m_idx * 3 + list(ShiftOp).index(key.op)) * 64 + key.amount] * self.accumulate_across_x(key.x_indices)
+                    scalars[(m_idx * 3 + list(ShiftOp).index(key.op)) * 64 + key.amount]
+                    * self.accumulate_across_x(key.x_indices)
                     for key in keys
                 ),
-                self.field.zero()
+                self.field.zero(),
             )
 
         M = [
-            sum((accumulate_for_m_keys(m_keys, m_idx) for m_idx, m_keys in enumerate(abc_keys)), self.field.zero()) 
+            sum((accumulate_for_m_keys(m_keys, m_idx) for m_idx, m_keys in enumerate(abc_keys)), self.field.zero())
             for abc_keys in zip(self.a_record, self.b_record, self.c_record)
         ]
 

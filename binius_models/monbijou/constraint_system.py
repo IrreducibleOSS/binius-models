@@ -16,8 +16,10 @@ class ShiftOp(Enum):
         else:
             raise ValueError(f"Unknown shift operation: {self}")
 
+
 Operand = list[tuple[int, ShiftOp, int]]  # list of (y index, shift op, shift amount)
 Constraint = tuple[Operand, Operand, Operand]
+
 
 class ConstraintSystem:
     def __init__(self, l_and: int, l_words: int, and_constraints: list[Constraint]):
