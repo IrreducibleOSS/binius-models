@@ -1,31 +1,15 @@
-from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 from ..finite_fields.finite_field import FiniteFieldElem
 from ..finite_fields.utils import tensor_expand
 from ..ips.polynomial import Polynomial
 from ..ips.sumcheck import Sumcheck
-from .constraint_system import ConstraintSystem, ShiftOp
+from .constraint_system import ConstraintSystem, Key, Record, ShiftOp
 from .utils import univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
 
-@dataclass
-class Key:
-    op: ShiftOp
-    amount: int
-    x_indices: list[int]
-
-
-# A Record is constructed for each operand.
-# A Record is a list with an item for each word.
-# The item for a word specifies how the word is used as an operand.
-# The item is a list of Keys.
-# For every shift variant and shift amount applied to the word there is a Key in this list.
-# Along with the shift variant and shift amount, the Key also stores the indices of
-# the constraints in which that shifted word is used.
-Record = list[list[Key]]
 MultilinearTriplet = dict[ShiftOp, list[F]]
 
 
