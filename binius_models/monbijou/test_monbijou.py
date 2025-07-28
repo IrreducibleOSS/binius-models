@@ -4,7 +4,7 @@ import pytest
 
 from ..finite_fields.ghash import GHASHElem
 from .constraint_system import ConstraintSystem, Operand, ShiftOp
-from .prover import Prover, Record
+from .prover import Key, Prover, Record
 from .verifier import Verifier
 
 
@@ -79,12 +79,11 @@ def build_record(n_words: int, operands: list[Operand]) -> Record:
         for y, op, s in operand:
             keys = record[y]
             # Find existing key with same op and s, or None if not found
-            existing_key = next((key for key in keys if key[0] == op and key[1] == s), None)
+            existing_key = next((key for key in keys if key.op == op and key.amount == s), None)
             if existing_key:
-                _, _, x_list = existing_key
-                x_list.append(x)
+                existing_key.x_indices.append(x)
             else:
-                keys.append((op, s, [x]))
+                keys.append(Key(op=op, amount=s, x_indices=[x]))
     return record
 
 def test_good():
@@ -113,7 +112,14 @@ def test_good():
 
 
 def test_bad():
-    prover = Prover(GHASHElem, constraint_system, witness)
+    n_words = 1 << constraint_system.l_words
+    # Unzip the constraints into lists of operands
+    a_operands, b_operands, c_operands = zip(*constraint_system.and_constraints)
+    # Build a record for each list of operands
+    a_record = build_record(n_words, a_operands)
+    b_record = build_record(n_words, b_operands)
+    c_record = build_record(n_words, c_operands)
+    prover = Prover(GHASHElem, constraint_system, witness, a_record, b_record, c_record)
 
     r_zhat_prime = GHASHElem.random()
     r_x_prime = [GHASHElem.random() for _ in range(constraint_system.l_and)]

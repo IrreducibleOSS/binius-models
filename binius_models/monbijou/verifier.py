@@ -1,7 +1,7 @@
 from typing import Generic, TypeVar
 
 from ..finite_fields.finite_field import FiniteFieldElem
-from ..finite_fields.utils import tensor_expand, univariate_expand
+from ..finite_fields.utils import tensor_expand
 from .constraint_system import ConstraintSystem, Operand, ShiftOp
 from .prover import Prover
 from .utils import univariate_expand
