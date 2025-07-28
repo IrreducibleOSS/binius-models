@@ -81,7 +81,8 @@ class Verifier(Generic[F]):
             challenge = self.field.random()
             self.prover.first_phase_sumcheck.receive_challenge(challenge)
             claim = self.prover.first_phase_sumcheck.interpolate(evaluations, challenge)
-        r_j, r_s = self.prover.first_phase_sumcheck.challenges[:6], self.prover.first_phase_sumcheck.challenges[6:]
+        r_j = self.prover.first_phase_sumcheck.challenges[:6]
+        r_s = self.prover.first_phase_sumcheck.challenges[6:]
 
         self.prover.initiate_second_phase()  # don't need to send r_s and r_j; prover memoized these during sumcheck
         for _ in range(self.constraint_system.l_words):
@@ -112,10 +113,10 @@ class Verifier(Generic[F]):
         h_op = self._evaluate_h_op(r_zhat_prime, r_j, r_s)
 
         # Evaluate the matrix corresponding to each operand
-        def evaluate_m_matrix(operands: tuple[Operand, ...]) -> F:
+        def _evaluate_m_matrix(operands: tuple[Operand, ...]) -> F:
             return sum(
                 (
-                    (h_op[op] * r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s])
+                    h_op[op] * r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
                     for x, operand in enumerate(operands)
                     for y, op, s in operand
                 ),
@@ -125,7 +126,7 @@ class Verifier(Generic[F]):
         # Batch the operand matrix evaluations with lambda
         monster_eval = sum(
             (
-                (lambda_val**m_idx) * evaluate_m_matrix(operands)
+                lambda_val**m_idx * _evaluate_m_matrix(operands)
                 for m_idx, operands in enumerate(zip(*self.constraint_system.and_constraints))
             ),
             self.field.zero(),
