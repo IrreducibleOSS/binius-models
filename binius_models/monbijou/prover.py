@@ -1,10 +1,11 @@
 from typing import Generic, TypeVar
 
 from ..finite_fields.finite_field import FiniteFieldElem
-from ..finite_fields.utils import tensor_expand, univariate_expand
+from ..finite_fields.utils import tensor_expand
 from ..ips.polynomial import Polynomial
 from ..ips.sumcheck import Sumcheck
 from .constraint_system import ConstraintSystem, ShiftOp
+from .utils import univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
 
@@ -84,7 +85,7 @@ class Prover(Generic[F]):
             "b": lambda_b,
             "c": lambda_c,
         }
-        h = {
+        h: dict[ShiftOp, list[list[F]]] = {
             ShiftOp.SLL: [],
             ShiftOp.SRL: [],
             ShiftOp.SRA: [],
@@ -163,7 +164,7 @@ class Prover(Generic[F]):
         # i.e., everywhere you see [j][s], that would need to be replaced with j << 6 | s, etc. etc.
         # note that we are doing our sumcheck in such a way that s is less-significant and j is more-significant.
         # j is the outer (row) index; s is the inner (column) index. summing all rows is concat in row-major order.
-        multilinears = [
+        multilinears: list[list[F]] = [
             sum(h[ShiftOp.SLL], []),
             sum(g[ShiftOp.SLL]["a"], []),
             sum(h[ShiftOp.SRL], []),

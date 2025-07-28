@@ -220,7 +220,7 @@ def fanpaar_square_recursive(field: BinaryTowerField, subfield: BinaryTowerField
     return field.from_subfield_tuple((z0 ^ z2, z2a))
 
 
-def fanpaar_inverse_recursive(field: BinaryTowerField, subfield: BinaryTowerField, a: int):
+def fanpaar_inverse_recursive(field: BinaryTowerField, subfield: BinaryTowerField, a: int) -> int:
     if subfield._is_valid(a):
         return subfield.inverse(a)
     a0, a1 = field.to_subfield_tuple(a)

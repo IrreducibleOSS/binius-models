@@ -7,27 +7,23 @@ from .polynomial import Polynomial
 from .sumcheck import Sumcheck
 
 
-class Elem1b(BinaryTowerFieldElem):
-    field = FanPaarTowerField(0)
-
-
-class Elem8b(BinaryTowerFieldElem):
+class Elem8bFP(BinaryTowerFieldElem):
     field = FanPaarTowerField(3)
 
 
-class Elem128b(BinaryTowerFieldElem):
+class Elem128bFP(BinaryTowerFieldElem):
     field = FanPaarTowerField(7)
 
 
 def run_test(v, d, composition, high_to_low):
-    multilinears = [[Elem128b(Elem8b.random().value) for _ in range(1 << v)] for _ in range(d)]
-    sumcheck = Sumcheck(Elem128b, multilinears, composition, high_to_low)
+    multilinears = [[Elem128bFP(Elem8bFP.random().value) for _ in range(1 << v)] for _ in range(d)]
+    sumcheck = Sumcheck(Elem128bFP, multilinears, composition, high_to_low)
 
     claim = sumcheck.sum()
     for _ in range(sumcheck.v):
         evaluations = sumcheck.compute_round_polynomial()
         evaluations.insert(0, evaluations[0] + claim)
-        challenge = Elem128b.random()
+        challenge = Elem128bFP.random()
         sumcheck.receive_challenge(challenge)
         claim = sumcheck.interpolate(evaluations, challenge)
 
@@ -38,7 +34,7 @@ def test_1_5() -> None:
     # 1 polynomial! of length 2⁵, so over 5 variables.
     v = 5
     d = 1
-    composition = Polynomial(Elem128b, d, {tuple([1] * d): Elem128b.one()})  # identity polynomial on 1 variable
+    composition = Polynomial(Elem128bFP, d, {tuple([1] * d): Elem128bFP.one()})  # identity polynomial on 1 variable
     for high_to_low in [True, False]:
         run_test(v, d, composition, high_to_low)
 
@@ -47,7 +43,7 @@ def test_3_5() -> None:
     # 3 polynomials, each of length 2⁵, so over 5 variables.
     v = 5
     d = 3
-    composition = Polynomial(Elem128b, d, {tuple([1] * d): Elem128b.one()})  # product monomial on d variables.
+    composition = Polynomial(Elem128bFP, d, {tuple([1] * d): Elem128bFP.one()})  # product monomial on d variables.
     for high_to_low in [True, False]:
         run_test(v, d, composition, high_to_low)
 
@@ -57,7 +53,7 @@ def test_4_8() -> None:
     v = 4
     d = 8
     multidegree = tuple(1 if x % 5 == 0 else 0 for x in range(d))
-    composition = Polynomial(Elem128b, d, {multidegree: Elem128b.one()})  # product monomial on d variables.
+    composition = Polynomial(Elem128bFP, d, {multidegree: Elem128bFP.one()})  # product monomial on d variables.
     for high_to_low in [True, False]:
         run_test(v, d, composition, high_to_low)
 
@@ -67,7 +63,7 @@ def test_5_7() -> None:
     # 5 polynomials, each of length 2⁷, so over 7 variables.
     v = 7
     d = 5
-    composition = Polynomial(Elem128b, d, {tuple([1] * d): Elem128b.one()})  # product monomial on d variables.
+    composition = Polynomial(Elem128bFP, d, {tuple([1] * d): Elem128bFP.one()})  # product monomial on d variables.
     for high_to_low in [True, False]:
         run_test(v, d, composition, high_to_low)
 
@@ -78,11 +74,11 @@ def test_3_5_other_composition() -> None:
     v = 5
     d = 3
     composition = Polynomial(
-        Elem128b,
+        Elem128bFP,
         d,
         {
-            (0, 0, 0): Elem128b(int("0xaeaeaeaeaeaeaeaebdbdbdbdbdbdbdbd", 16)),
-            (1, 2, 3): Elem128b.one(),
+            (0, 0, 0): Elem128bFP(int("0xaeaeaeaeaeaeaeaebdbdbdbdbdbdbdbd", 16)),
+            (1, 2, 3): Elem128bFP.one(),
         },
     )  # 3-variate polynomial: X₀ ⋅ X₁² ⋅ X₂³ + 0xaeaeaeaeaeaeaeaebdbdbdbdbdbdbdbd
     for high_to_low in [True, False]:
@@ -94,12 +90,12 @@ def test_3_5_crazy() -> None:
     v = 5
     d = 3
     composition = Polynomial(
-        Elem128b,
+        Elem128bFP,
         d,
         {
-            (0, 0, 0): Elem128b(int("0xaeaeaeaeaeaeaeaebdbdbdbdbdbdbdbd", 16)),
-            (1, 2, 4): Elem128b(int("0xaaee", 16)),
-            (2, 3, 10): Elem128b.one(),
+            (0, 0, 0): Elem128bFP(int("0xaeaeaeaeaeaeaeaebdbdbdbdbdbdbdbd", 16)),
+            (1, 2, 4): Elem128bFP(int("0xaaee", 16)),
+            (2, 3, 10): Elem128bFP.one(),
         },
     )
     for high_to_low in [True, False]:

@@ -27,8 +27,8 @@ class FRIBinius(Generic[F]):
         self.log_inv_rate = log_inv_rate
         self.field = field
         self.high_to_low = high_to_low
-        self.additive_ntt = AdditiveNTT[F](field, self.var, log_inv_rate, high_to_low=self.high_to_low)
-        self.oracle = VectorOracle[F]()
+        self.additive_ntt = AdditiveNTT(field, self.var, log_inv_rate, high_to_low=self.high_to_low)
+        self.oracle: VectorOracle[F] = VectorOracle()
         # ...the ONLY place we use this will be in the self.verifier_query method, which is added for testing purposes.
 
     def _fold(self, position: F, values: tuple[F, F], r: F) -> F:

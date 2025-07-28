@@ -2,8 +2,6 @@
 
 # An Implementation of Ring-Switching protocol.
 # On a high level, this allows us to instantiate a "small field" PCS given a large-field PCS with no extra overhead.
-# We provide two "output" methods: one for instantiating a `LargeFieldClaim`, and another for passing the output to
-# a FRI-Binius instance. In particular, the latter instantiates an end-to-end protocol.
 
 # After one shot, one is reduced to a multilinear evaluation claim over
 # A := L ⊗_K L. We then run a sort of induced "row-batched" sumcheck.
@@ -17,15 +15,8 @@ from typing import Generic, TypeVar
 from ..finite_fields.finite_field import FiniteFieldElem
 from ..finite_fields.utils import tensor_expand
 from ..ips.polynomial import Polynomial
-
-# [DP24]: https://eprint.iacr.org/2024/504.pdf
-# [D24]: https://hackmd.io/@benediamond/BJgKxUau0
 from ..ips.sumcheck import Sumcheck
 from .fri_binius import FRIBinius
-
-# This code again fixes L / K to be 𝔽_{2¹²⁸} / 𝔽_{2⁸} via the below imports.
-# In particular, to work with different fields, one must also change the code in
-# the `tensor_alg.py`, `sumcheck.py` and `fri_binius.py` files.
 from .tensor_alg import TensorAlgElem
 
 K = TypeVar("K", bound=FiniteFieldElem)
@@ -39,7 +30,7 @@ class RingSwitching(Generic[K, L]):
         self.var = var
         self.kappa = large.field.degree.bit_length() - small.field.degree.bit_length()
         self.l_prime = self.var - self.kappa
-        self.fri_binius = FRIBinius[L](self.large, self.l_prime, log_inv_rate)
+        self.fri_binius = FRIBinius(self.large, self.l_prime, log_inv_rate)
 
     def _large_small_dot(self, log_length: int, large_vector: list[L], small_vector: list[K]) -> L:
         # abusing the implementation of towers. product will inherit the type of the first operand.
