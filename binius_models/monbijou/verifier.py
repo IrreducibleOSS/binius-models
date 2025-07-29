@@ -126,8 +126,8 @@ class Verifier(Generic[F]):
         # Batch the operand matrix evaluations with lambda
         monster_eval = sum(
             (
-                lambda_val**m_idx * _evaluate_m_matrix(operands)
-                for m_idx, operands in enumerate(zip(*self.constraint_system.and_constraints))
+                lambda_val**m * _evaluate_m_matrix(operands)
+                for m, operands in enumerate(zip(*self.constraint_system.and_constraints))
             ),
             self.field.zero(),
         )

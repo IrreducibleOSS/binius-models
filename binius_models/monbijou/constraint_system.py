@@ -18,6 +18,10 @@ class ShiftOp(Enum):
             raise ValueError(f"Unknown shift operation: {self}")
 
 
+Operand = list[tuple[int, ShiftOp, int]]  # list of (y index, shift op, shift amount)
+Constraint = tuple[Operand, Operand, Operand]
+
+
 @dataclass
 class Key:
     op: ShiftOp
@@ -32,9 +36,7 @@ class Key:
 # For every shift variant and shift amount applied to the word there is a Key in this list.
 # Along with the shift variant and shift amount, the Key also stores the indices of
 # the constraints in which that shifted word is used.
-Record = list[list[Key]]
-Operand = list[tuple[int, ShiftOp, int]]  # list of (y index, shift op, shift amount)
-Constraint = tuple[Operand, Operand, Operand]
+Record = list[tuple[list[Key], list[Key], list[Key]]]
 
 
 class ConstraintSystem:
@@ -45,18 +47,16 @@ class ConstraintSystem:
         assert len(self.and_constraints) == 1 << self.l_and
 
     # Preprocess a record for each operand
-    def _build_record(self, operands: tuple[Operand, ...]) -> Record:
-        record: Record = [[] for _ in range(1 << self.l_words)]
-        for x, operand in enumerate(operands):
-            for y, op, s in operand:
-                keys = record[y]
-                # Find existing key with same op and s, or None if not found
-                existing_key = next((key for key in keys if key.op == op and key.amount == s), None)
-                if existing_key:
-                    existing_key.x_indices.append(x)
-                else:
-                    keys.append(Key(op=op, amount=s, x_indices=[x]))
+    def build_record(self) -> Record:
+        record: Record = [([], [], []) for _ in range(1 << self.l_words)]
+        for x, constraint in enumerate(self.and_constraints):
+            for m, I_m in enumerate(constraint):
+                for y, op, s in I_m:
+                    keys = record[y][m]
+                    # Find existing key with same op and s, or None if not found
+                    existing_key = next((key for key in keys if key.op == op and key.amount == s), None)
+                    if existing_key:
+                        existing_key.x_indices.append(x)
+                    else:
+                        keys.append(Key(op=op, amount=s, x_indices=[x]))
         return record
-
-    def build_records(self) -> tuple[Record, ...]:  # will be exactly 3 in tuple, but mypy doesn't like that
-        return tuple(self._build_record(operands) for operands in zip(*self.and_constraints))
