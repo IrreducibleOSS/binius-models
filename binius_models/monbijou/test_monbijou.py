@@ -3,9 +3,10 @@ import random
 import pytest
 
 from ..finite_fields.ghash import GHASHElem
-from .constraint_system import ConstraintSystem, ShiftOp
-from .prover import Prover
+from .constraint_system import ConstraintSystem, Operand, ShiftOp
+from .prover import Key, Prover, Record
 from .verifier import Verifier
+
 
 # this is a silly, dummy constraint system, that basically asserts that (⋀ᵢ₌₀⁷ w[i] << i) >> 5 == w[15] ~>> 2.
 # it puts the first 8 words into a tree of ANDs, shifting each thing by the appropriate amount.
@@ -15,6 +16,7 @@ from .verifier import Verifier
 constraint_system = ConstraintSystem(
     l_and=3,  # 8 constraints
     l_words=4,  # witness length is 16
+
     and_constraints=[
         (  # w[0] << 0 & w[1] << 1 == w[8]
             [(0, ShiftOp.SLL, 0)],
@@ -70,9 +72,29 @@ witness[13] = witness[10] & witness[11]
 witness[14] = witness[12] & witness[13]
 witness[15] = witness[14] >> 3
 
+# Preprocess a record for each operand
+def build_record(n_words: int, operands: list[Operand]) -> Record:
+    record = [[] for _ in range(n_words)]
+    for x, operand in enumerate(operands):
+        for y, op, s in operand:
+            keys = record[y]
+            # Find existing key with same op and s, or None if not found
+            existing_key = next((key for key in keys if key.op == op and key.amount == s), None)
+            if existing_key:
+                existing_key.x_indices.append(x)
+            else:
+                keys.append(Key(op=op, amount=s, x_indices=[x]))
+    return record
 
 def test_good():
-    prover = Prover(GHASHElem, constraint_system, witness)
+    n_words = 1 << constraint_system.l_words
+    # Unzip the constraints into lists of operands
+    a_operands, b_operands, c_operands = zip(*constraint_system.and_constraints)
+    # Build a record for each list of operands
+    a_record = build_record(n_words, a_operands)
+    b_record = build_record(n_words, b_operands)
+    c_record = build_record(n_words, c_operands)
+    prover = Prover(GHASHElem, constraint_system, witness, a_record, b_record, c_record)
 
     # the below block of code "simulates" the univariate skip.
     r_zhat_prime = GHASHElem.random()
@@ -90,7 +112,14 @@ def test_good():
 
 
 def test_bad():
-    prover = Prover(GHASHElem, constraint_system, witness)
+    n_words = 1 << constraint_system.l_words
+    # Unzip the constraints into lists of operands
+    a_operands, b_operands, c_operands = zip(*constraint_system.and_constraints)
+    # Build a record for each list of operands
+    a_record = build_record(n_words, a_operands)
+    b_record = build_record(n_words, b_operands)
+    c_record = build_record(n_words, c_operands)
+    prover = Prover(GHASHElem, constraint_system, witness, a_record, b_record, c_record)
 
     r_zhat_prime = GHASHElem.random()
     r_x_prime = [GHASHElem.random() for _ in range(constraint_system.l_and)]

@@ -2,12 +2,11 @@ from typing import Generic, TypeVar
 
 from ..finite_fields.finite_field import FiniteFieldElem
 from ..finite_fields.utils import tensor_expand
-from .constraint_system import ConstraintSystem, ShiftOp
+from .constraint_system import ConstraintSystem, Operand, ShiftOp
 from .prover import Prover
 from .utils import univariate_expand
 
 F = TypeVar("F", bound=FiniteFieldElem)
-
 
 class Verifier(Generic[F]):
     def __init__(self, field: type[F], constraint_system: ConstraintSystem, prover: Prover[F]):
@@ -71,17 +70,17 @@ class Verifier(Generic[F]):
         }
 
     def verify_shift_reduction(self, r_zhat_prime: F, r_x_prime: list[F], alpha_a: F, alpha_b: F, alpha_c: F) -> None:
-        (lambda_a, lambda_b, lambda_c) = (self.field.random(), self.field.random(), self.field.random())
-        claim = lambda_a * alpha_a + lambda_b * alpha_b + lambda_c * alpha_c
+        lambda_val = self.field.random()
+        claim = alpha_a + lambda_val * alpha_b + lambda_val.square() * alpha_c
 
-        self.prover.initiate_first_phase(lambda_a, lambda_b, lambda_c)
+        self.prover.initiate_first_phase(lambda_val)
         for _ in range(12):
             evaluations = self.prover.first_phase_sumcheck.compute_round_polynomial()
             evaluations.insert(0, evaluations[0] + claim)
             challenge = self.field.random()
             self.prover.first_phase_sumcheck.receive_challenge(challenge)
             claim = self.prover.first_phase_sumcheck.interpolate(evaluations, challenge)
-        r_s, r_j = self.prover.first_phase_sumcheck.challenges[:6], self.prover.first_phase_sumcheck.challenges[6:]
+        r_j, r_s = self.prover.first_phase_sumcheck.challenges[:6], self.prover.first_phase_sumcheck.challenges[6:]
 
         self.prover.initiate_second_phase()  # don't need to send r_s and r_j; prover memoized these during sumcheck
         for _ in range(self.constraint_system.l_words):
@@ -93,58 +92,42 @@ class Verifier(Generic[F]):
         r_y = self.prover.second_phase_sumcheck.challenges[:]
 
         # begin computation of final evaluations.
-        lambdas = {
-            "a": lambda_a,
-            "b": lambda_b,
-            "c": lambda_c,
-        }
         r_s_tensor = tensor_expand(self.field, r_s, 6)  # prover already had to compute this
-        r_j_tensor = tensor_expand(self.field, r_j, 6)  # prover already had to compute this
         r_x_prime_tensor = tensor_expand(self.field, r_x_prime, self.constraint_system.l_and)
         r_y_tensor = tensor_expand(self.field, r_y, self.constraint_system.l_words)
 
         # NOTE: compute w̃(r_j, r_y) manually for our (testing) purposes; in real life it will be delegated to the PCS
+        r_j_tensor = tensor_expand(self.field, r_j, 6)  # prover already had to compute this
         w_r_j_r_y = sum(
             (
                 sum((r_j_tensor[j] for j in range(64) if self.prover.witness[y] >> j & 1), self.field.zero())
                 * r_y_tensor[y]
                 for y in range(1 << self.constraint_system.l_words)
             ),
-            self.field.zero(),
+            self.field.zero()
         )
 
-        right_hand_multilinear = self.field.zero()
-        M = {  # will contain M̃ₘ,ₒₚ(r'_x, r_y, r_s)
-            ShiftOp.SLL: {
-                "a": self.field.zero(),
-                "b": self.field.zero(),
-                "c": self.field.zero(),
-            },
-            ShiftOp.SRL: {
-                "a": self.field.zero(),
-                "b": self.field.zero(),
-                "c": self.field.zero(),
-            },
-            ShiftOp.SRA: {
-                "a": self.field.zero(),
-                "b": self.field.zero(),
-                "c": self.field.zero(),
-            },
-        }
-        for x, (I_a, I_b, I_c) in enumerate(self.constraint_system.and_constraints):
-            for y, op, s in I_a:
-                M[op]["a"] += r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
-            for y, op, s in I_b:
-                M[op]["b"] += r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
-            for y, op, s in I_c:
-                M[op]["c"] += r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s]
-
+        # Evaluate the monster multilinear
         h_op = self._evaluate_h_op(r_zhat_prime, r_j, r_s)
-        for op in [ShiftOp.SLL, ShiftOp.SRL, ShiftOp.SRA]:
-            result = self.field.zero()
-            for m, lambda_m in lambdas.items():
-                result += lambda_m * M[op][m]
-            result *= h_op[op]
-            right_hand_multilinear += result
 
-        assert claim == w_r_j_r_y * right_hand_multilinear  # just one check!
+        # Evaluate the matrix corresponding to each operand
+        def evaluate_m_matrix(operands: list[Operand]) -> F:
+            return sum(
+                (
+                    (h_op[op] * r_x_prime_tensor[x] * r_y_tensor[y] * r_s_tensor[s])
+                    for x, operand in enumerate(operands)
+                    for y, op, s in operand
+                ),
+                self.field.zero()
+            )
+
+        # Batch the operand matrix evaluations with lambda
+        monster_eval = sum(
+            (
+                (lambda_val**m_idx) * evaluate_m_matrix(operands)
+                for m_idx, operands in enumerate(zip(*self.constraint_system.and_constraints))
+            ),
+            self.field.zero()
+        )
+
+        assert claim == w_r_j_r_y * monster_eval  # just one check!
