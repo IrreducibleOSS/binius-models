@@ -87,19 +87,50 @@ class Prover(Generic[F]):
         self.l_tilde = univariate_expand(self.field, r_zhat_prime)
         self.r_x_prime = r_x_prime
 
-        def extrapolate_bitstring(value):
+        def _extrapolate_bitstring(value):
             # interpreting `value` as the (bit-valued!) evaluations of some univariate polynomial over the domain D,
             # returns that polynomial's value at r'_ẑ. because we precomputed L̃(r'_ẑ, i), just now need a subset sum.
             return sum((self.l_tilde[i] for i in range(64) if value >> i & 1), self.field.zero())
 
-        def evaluate(m):
-            univariate = [extrapolate_bitstring(m[i]) for i in range(1 << self.constraint_system.l_and)]  # specialize
+        def _evaluate(m):
+            univariate = [_extrapolate_bitstring(m[i]) for i in range(1 << self.constraint_system.l_and)]  # specialize
             for i in range(self.constraint_system.l_and):  # now fold
                 for j in range(1 << self.constraint_system.l_and - i - 1):
                     univariate[j] = univariate[j << 1] + r_x_prime[i] * (univariate[j << 1 | 1] - univariate[j << 1])
             return univariate[0]
 
-        return (evaluate(self.a), evaluate(self.b), evaluate(self.c))
+        return (_evaluate(self.a), _evaluate(self.b), _evaluate(self.c))
+
+    # Sums the values in the tensor corresponding to the indices in x_indices
+    def _accumulate_across_x(self, x_indices: list[int]) -> F:
+        return sum((self.r_x_prime_tensor[x] for x in x_indices), self.field.zero())
+
+    # Builds a multilinear triplet from a record.
+    # This is the bottleneck of the prover.
+    # In particular the j-loop is the bottleneck.
+    def _build_triplet_from_record(self, record: Record) -> MultilinearTriplet:
+        assert len(self.witness) == len(record)
+
+        triplet = {
+            ShiftOp.SLL: [self.field.zero()] * (64 * 64),
+            ShiftOp.SRL: [self.field.zero()] * (64 * 64),
+            ShiftOp.SRA: [self.field.zero()] * (64 * 64),
+        }
+
+        # Note the j-loop is now the inner-most.
+        # Benchmarking for RSA the original loop
+        # ordering is about 2.5 times slower.
+        for original_word, keys in zip(self.witness, record):
+            for key in keys:
+                word = original_word
+                multilinear = triplet[key.op]
+                acc = self._accumulate_across_x(key.x_indices)
+                for j in range(64):
+                    if word & 1:
+                        multilinear[key.amount << 6 | j] += acc
+                    word >>= 1
+
+        return triplet
 
     def initiate_first_phase(self, lambda_val):
         self.lambda_val = lambda_val
@@ -119,13 +150,13 @@ class Prover(Generic[F]):
                 h[ShiftOp.SRL][s << 6 | j] = val
                 h[ShiftOp.SRA][s << 6 | j] = val
         for s in range(1, 64):
-            h[ShiftOp.SRA][s << 6 | 63] += h[ShiftOp.SRA][(s - 1) << 6 | 63]
+            h[ShiftOp.SRA][s << 6 | 63] += h[ShiftOp.SRA][s - 1 << 6 | 63]
 
         # Compute the g multilinear triplet
         self.r_x_prime_tensor = tensor_expand(self.field, self.r_x_prime, self.constraint_system.l_and)
 
         # Compute one multilinear triplet for each of a, b, c
-        triplets = [self.build_triplet_from_record(record) for record in [self.a_record, self.b_record, self.c_record]]
+        triplets = [self._build_triplet_from_record(record) for record in [self.a_record, self.b_record, self.c_record]]
 
         # The g multilinear triplet has g.op the lambda_val-linear combination
         # of triplet_a.op, triplet_b.op, and triplet_c.op
@@ -136,7 +167,7 @@ class Prover(Generic[F]):
         g: MultilinearTriplet = {
             op: [
                 sum(
-                    ((self.lambda_val**m_idx) * triplet[op][k] for m_idx, triplet in enumerate(triplets)),
+                    (self.lambda_val**m_idx * triplet[op][k] for m_idx, triplet in enumerate(triplets)),
                     self.field.zero(),
                 )
                 for k in range(64 * 64)
@@ -165,40 +196,10 @@ class Prover(Generic[F]):
         )
         self.first_phase_sumcheck = Sumcheck(self.field, multilinears, composition)
 
-    # Sums the values in the tensor corresponding to the indices in x_indices
-    def accumulate_across_x(self, x_indices: list[int]) -> F:
-        return sum((self.r_x_prime_tensor[x] for x in x_indices), self.field.zero())
-
-    # Builds a multilinear triplet from a record.
-    # This is the bottleneck of the prover.
-    # In particular the j-loop is the bottleneck.
-    def build_triplet_from_record(self, record: Record) -> MultilinearTriplet:
-        assert len(self.witness) == len(record)
-
-        triplet = {
-            ShiftOp.SLL: [self.field.zero()] * (64 * 64),
-            ShiftOp.SRL: [self.field.zero()] * (64 * 64),
-            ShiftOp.SRA: [self.field.zero()] * (64 * 64),
-        }
-
-        # Note the j-loop is now the inner-most.
-        # Benchmarking for RSA the original loop
-        # ordering is about 2.5 times slower.
-        for original_word, keys in zip(self.witness, record):
-            for key in keys:
-                word = original_word
-                multilinear = triplet[key.op]
-                acc = self.accumulate_across_x(key.x_indices)
-                for j in range(64):
-                    if word & 1:
-                        multilinear[key.amount << 6 | j] += acc
-                    word >>= 1
-
-        return triplet
-
     def initiate_second_phase(self):
         # assert: self.first_phase_sumcheck.round == 12
-        r_j, r_s = self.first_phase_sumcheck.challenges[:6], self.first_phase_sumcheck.challenges[6:]
+        r_j = self.first_phase_sumcheck.challenges[:6]
+        r_s = self.first_phase_sumcheck.challenges[6:]
 
         # Compute the partially folded witness
         r_j_tensor = tensor_expand(self.field, r_j, 6)
@@ -225,7 +226,10 @@ class Prover(Generic[F]):
         # # UNFLATTENED
         # def accumulate_keys(keys: list[Key]) -> F:
         #     return sum(
-        #         (h_op_r_j_r_s[op] * r_s_tensor[s] * self.accumulate_across_x(x_indices) for op, s, x_indices in keys),
+        #         (
+        #             h_op_r_j_r_s[key.op] * r_s_tensor[key.amount] * self._accumulate_across_x(key.x_indices)
+        #             for key in keys
+        #         ),
         #         self.field.zero(),
         #     )
 
@@ -251,18 +255,18 @@ class Prover(Generic[F]):
                     m_op_s_scalar = m_op_scalar * r_s_tensor[s]
                     scalars[m_op_s_idx] = m_op_s_scalar
 
-        def accumulate_for_m_keys(keys: list[Key], m_idx: int) -> F:
+        def _accumulate_for_m_keys(keys: list[Key], m_idx: int) -> F:
             return sum(
                 (
-                    scalars[(m_idx * 3 + list(ShiftOp).index(key.op)) * 64 + key.amount]
-                    * self.accumulate_across_x(key.x_indices)
+                    scalars[m_idx * 3 + list(ShiftOp).index(key.op) << 6 | key.amount]
+                    * self._accumulate_across_x(key.x_indices)
                     for key in keys
                 ),
                 self.field.zero(),
             )
 
         M = [
-            sum((accumulate_for_m_keys(m_keys, m_idx) for m_idx, m_keys in enumerate(abc_keys)), self.field.zero())
+            sum((_accumulate_for_m_keys(m_keys, m_idx) for m_idx, m_keys in enumerate(abc_keys)), self.field.zero())
             for abc_keys in zip(self.a_record, self.b_record, self.c_record)
         ]
 
