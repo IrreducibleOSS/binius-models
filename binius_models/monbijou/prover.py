@@ -133,11 +133,11 @@ class Prover(Generic[F]):
 
         # h multilinears are indexed by s and j, s the more significant variable.
         for s in range(64):
-            for j in range(64):
-                h[ShiftOp.SLL][s << 6 | j] = self.l_tilde[j + s] if j + s < 64 else self.field.zero()
-                val = self.l_tilde[j - s] if s <= j else self.field.zero()
-                h[ShiftOp.SRL][s << 6 | j] = val
-                h[ShiftOp.SRA][s << 6 | j] = val
+            for j in range(64 - s):
+                h[ShiftOp.SLL][s << 6 | j] = self.l_tilde[j + s]
+            for j in range(s, 64):
+                h[ShiftOp.SRL][s << 6 | j] = self.l_tilde[j - s]
+                h[ShiftOp.SRA][s << 6 | j] = self.l_tilde[j - s]
         for s in range(1, 64):
             h[ShiftOp.SRA][s << 6 | 63] += h[ShiftOp.SRA][s - 1 << 6 | 63]
 
