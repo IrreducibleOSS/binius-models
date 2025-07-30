@@ -1,5 +1,10 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import TypeVar
+
+from ..finite_fields.finite_field import FiniteFieldElem
+
+F = TypeVar("F", bound=FiniteFieldElem)
 
 
 class ShiftOp(Enum):
@@ -22,21 +27,19 @@ Operand = list[tuple[int, ShiftOp, int]]  # list of (y index, shift op, shift am
 Constraint = tuple[Operand, Operand, Operand]
 
 
+# A Key consists of (shift op, shift amount, operand index, word index, constraint indices)
+# The word at index `y` in the witness, shifted `s` bits with shift variant `op`, participates
+# as operand of index `m` in the constraints with indices in `xs`
 @dataclass
 class Key:
     op: ShiftOp
-    amount: int
-    x_indices: list[int]
+    s: int
+    m: int
+    y: int
+    xs: list[int]
 
-
-# A Record is constructed for each operand.
-# A Record is a list with an item for each word.
-# The item for a word specifies how the word is used as an operand.
-# The item is a list of Keys.
-# For every shift variant and shift amount applied to the word there is a Key in this list.
-# Along with the shift variant and shift amount, the Key also stores the indices of
-# the constraints in which that shifted word is used.
-Record = list[tuple[list[Key], list[Key], list[Key]]]
+    def accumulate(self, field_type: type[F], tensor: list[F]) -> F:
+        return sum((tensor[x] for x in self.xs), field_type.zero())
 
 
 class ConstraintSystem:
@@ -46,17 +49,22 @@ class ConstraintSystem:
         self.and_constraints = and_constraints
         assert len(self.and_constraints) == 1 << self.l_and
 
-    # Preprocess a record for each operand
-    def build_record(self) -> Record:
-        record: Record = [([], [], []) for _ in range(1 << self.l_words)]
+    # For every constraint system, we build a list of keys
+    def build_keys(self) -> list[Key]:
+        # Build a list of keys for every word
+        # We begin nested rather than flattened such that
+        # all keys belongs to a word are grouped together
+        nested_keys: list[list[Key]] = [[] for _ in range(1 << self.l_words)]
+
         for x, constraint in enumerate(self.and_constraints):
             for m, I_m in enumerate(constraint):
                 for y, op, s in I_m:
-                    keys = record[y][m]
-                    # Find existing key with same op and s, or None if not found
-                    existing_key = next((key for key in keys if key.op == op and key.amount == s), None)
+                    keys = nested_keys[y]
+                    existing_key = next((key for key in keys if key.op == op and key.s == s and key.m == m), None)
                     if existing_key:
-                        existing_key.x_indices.append(x)
+                        existing_key.xs.append(x)
                     else:
-                        keys.append(Key(op=op, amount=s, x_indices=[x]))
-        return record
+                        keys.append(Key(op=op, s=s, m=m, y=y, xs=[x]))
+
+        # Flatten and retain only the inner key lists that are non-empty
+        return sum([keys for keys in nested_keys if keys], [])

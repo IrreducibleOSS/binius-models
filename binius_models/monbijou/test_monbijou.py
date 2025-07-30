@@ -60,7 +60,7 @@ constraint_system = ConstraintSystem(
 )
 
 
-record = constraint_system.build_record()
+keys = constraint_system.build_keys()
 
 
 mask = (1 << 64) - 1
@@ -76,7 +76,7 @@ witness[15] = witness[14] >> 3
 
 
 def test_good():
-    prover = Prover(GHASHElem, constraint_system, record, witness)
+    prover = Prover(GHASHElem, constraint_system, keys, witness)
 
     # the below block of code "simulates" the univariate skip.
     r_zhat_prime = GHASHElem.random()
@@ -94,7 +94,7 @@ def test_good():
 
 
 def test_bad():
-    prover = Prover(GHASHElem, constraint_system, record, witness)
+    prover = Prover(GHASHElem, constraint_system, keys, witness)
 
     r_zhat_prime = GHASHElem.random()
     r_x_prime = [GHASHElem.random() for _ in range(constraint_system.l_and)]
