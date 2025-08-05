@@ -1,53 +1,45 @@
 # coding: utf-8
 from binascii import hexlify
+from itertools import combinations
 from CompactFIPS202 import SHA3_256, SHAKE256
 
 class Vision:
-    def __init__( self, security_level, nm, m ):
-        self.security_level = security_level
-        assert nm >= security_level, "state size (n) must be at least as large as security level"
-        assert nm % m == 0, "m must divide n"
-        self.n = nm
-        self.m = m
+    def __init__( self ):
+        self.security_level = 128
+        self.n = 512
+        self.m = 4
         # self.rate = floor(m/2)
         # self.capacity = m - self.rate
-        self.Nb = max(10, 2*ceil((1.0 * security_level + m + 8) / (8*m)))
+        self.Nb = max(10, 2*ceil((1.0 * self.security_level + self.m + 8) / (8*self.m)))
 
-        self.F = self.field(nm,m)
-        self.B, self.Binv, self.initial_constant, self.constants_matrix, self.constants_constant = Vision.sample_parameters(self.F, self.m)
-        self.MDS = Vision.MDS_matrix(self.F, self.m)
-
-    # generate a mxm MDS matrix over F
-    @staticmethod
-    def MDS_matrix( F, m ):
-        z = F.primitive_element()
-        mat = matrix([[z^(i*j) for j in range(0, 2*m)] for i in range(0, m)])
-        return mat.echelon_form()[:, m:]
-
-    # get the right defining polynomial for the extension field
-    # i.e., lexicographically the first irreducible polynomial of
-    # the right degree
-    @staticmethod
-    def field( n, m ):
+        # Choose field to be GHASH, GF(2)[X] / (X^128 + X^7 + X^2 + X + 1)
         GF2 = FiniteField(2)
-        GF2x.<x> = PolynomialRing(GF2, "x")
+        GF2x.<y> = PolynomialRing(GF2, "y")
+        F.<x> = FiniteField(2^128, "x", modulus=y^128 + y^7 + y^2 + y + 1)
+        self.F = F
 
-        i = -1
-        have_polynomial = False
-        while have_polynomial == False:
-            i = i + 2
-            bits = (bin(i)[2:])
-            polynomial = x^(n/m ) + sum(x^(len(bits)-1-j) for j in range(0,len(bits)) if bits[j] == '1')
-            have_polynomial = polynomial.is_irreducible()
+        # Choose MDS matrix to have the same structure as the AES MixColumns matrix
+        self.MDS = Matrix(
+            self.F,
+            [
+                [x, x + 1, 1, 1], # 2, 3, 1, 1
+                [1, x, x + 1, 1], # 1, 2, 3, 1
+                [1, 1, x, x + 1], # 1, 1, 2, 3
+                [x + 1, 1, 1, x], # 3, 1, 1, 2
+            ]
+        )
 
-        F = FiniteField(2^(n/m), "x", modulus=polynomial)
-        return F
+        print("Testing MDS property of the matrix...")
+        assert Vision.is_mds_matrix(self.MDS)
+
+        # Sample linearized polynomial coefficients pseudo-randomly
+        self.B, self.Binv, self.initial_constant, self.constants_matrix, self.constants_constant = Vision.sample_parameters(self.F, self.m)
 
     # get the parameters B, Binv, and the constants; extract them
     # from SHAKE seeded with a memorable string
     @staticmethod
     def sample_parameters( F, m ):
-        seed = "winteriscoming"
+        seed = "biniusiscoming"
         seed = bytearray(seed.encode('utf-8'))
 
         buf_len = 1 # bytes
@@ -170,6 +162,50 @@ class Vision:
         constant = sum(coefficients[i] * B[0]^(2^i) for i in range(0, deg))
         return [constant] + coefficients
 
+    # test if a matrix is Maximum Distance Separable (MDS)
+    # by checking that all square submatrices are non-singular
+    @staticmethod
+    def is_mds_matrix( matrix ):
+        """
+        Test if a matrix is Maximum Distance Separable (MDS).
+
+        A matrix is MDS if every square submatrix is non-singular (has non-zero determinant).
+        This function uses brute force to check all possible square submatrices.
+
+        Args:
+            matrix: A matrix to test
+
+        Returns:
+            True if the matrix is MDS, False otherwise
+        """
+        rows = matrix.nrows()
+        cols = matrix.ncols()
+        max_size = min(rows, cols)
+        print(matrix)
+
+        # Check all square submatrices of all sizes
+        for size in range(1, max_size + 1):
+            # Get all combinations of row indices
+            for row_indices in combinations(range(rows), size):
+                # Get all combinations of column indices
+                for col_indices in combinations(range(cols), size):
+                    # Extract the submatrix
+                    submatrix = matrix[list(row_indices), list(col_indices)]
+
+                    # Check if determinant is zero (matrix is singular)
+                    if size == 1:
+                        # For 1x1 matrices, just check if element is non-zero
+                        if submatrix[0, 0] == 0:
+                            print(row_indices, col_indices)
+                            return False
+                    else:
+                        det = submatrix.determinant()
+                        if det == 0:
+                            print(row_indices, col_indices)
+                            return False
+
+        return True
+
     # print parameters
     def Parameters( self ):
         print("# Parameters")
@@ -235,211 +271,7 @@ class Vision:
 
         return outputs
 
-class Rescue:
-    def __init__( self, security_level, q, m, alpha ):
-        assert log(1.0*q, 2.0) * m >= security_level , "state must have as least security_level-many bits!"
-        self.security_level = security_level
-        self.F = Rescue.first_field(q)
-        self.m = m
-        #self.rate = floor(m/2)
-        #self.capacity = m - self.rate
 
-        self.alpha = alpha
-        while gcd(self.alpha, q-1) != 1:
-            self.alpha += 2;
-        g, a, b = xgcd(self.alpha, q-1)
-        self.invalpha = a
-
-        if (self.alpha == 3):
-            self.Nb = max(10, 2*ceil((1.0 * security_level + 2) / (4*m)))
-        elif (self.alpha == 5):
-            self.Nb = max(10, 2*ceil((1.0 * security_level + 3) / (5.5*m)))
-        else :
-            self.Nb = max(10, 2*ceil((1.0 * security_level + 3) / (5.5*m)))
-
-        self.MDS = Rescue.MDS_matrix(self.F, self.m)
-        self.initial_constant, self.constants_matrix, self.constants_constant = Rescue.sample_parameters(self.F, self.m)
-
-    # generate a mxm MDS matrix over F
-    @staticmethod
-    def MDS_matrix( F, m ):
-        z = F.primitive_element()
-        mat = matrix([[z^(i*j) for j in range(0, 2*m)] for i in range(0, m)])
-        return mat.echelon_form()[:, m:]
-
-    # get the first field, lexicographically speaking, of the given order
-    @staticmethod
-    def first_field( q ):
-        factorization = factor(q)
-        assert(len(factorization) == 1), "cannot sample field with order not equal to a prime power"
-
-        p = factorization[0][0]
-        d = factorization[0][1]
-        Fp = FiniteField(p)
-        Fpx.<x> = PolynomialRing(Fp, "x")
-
-        integer = 1
-        poly = Fp(1) * x^d + Fp(1)
-        while not poly.is_irreducible():
-            integer += 1
-            int_cpy = copy(integer)
-            expansion = []
-            while int_cpy > 0:
-                expansion.append(int_cpy % p)
-                int_cpy = int_cpy // p
-            poly = Fp(1) * x^d + sum(Fp(expansion[i]) * x^i for i in range(0, len(expansion)))
-
-        return FiniteField(q, "x", modulus=poly)
-
-    # turn a string of bytes into a field element
-    @staticmethod
-    def field_element_from_bytes( F, buff ):
-        p = F.characteristic()
-        d = F.modulus().degree()
-        x = F.modulus().parent().gen()
-        integer = sum(256^i * buff[i] for i in range(0, len(buff)))
-
-        if d == 1:
-            return F(integer % p)
-
-        expansion = []
-        while integer > 0:
-            expansion.append(integer % p)
-            integer = integer // p
-
-        poly = sum(F(expansion[i]) * x^i for i in range(0, len(expansion)))
-        return F(poly)
-
-    # extract the constants
-    # from SHAKE seeded with a memorable string
-    @staticmethod
-    def sample_parameters( F, m ):
-        seed = "winteriscoming"
-        seed = bytearray(seed.encode('utf-8'))
-
-        buf_len = 1 # bytes
-        have_params = False
-        while have_params == False:
-            buf_len = buf_len * 2
-            randomness = SHAKE256(seed, buf_len)
-            try:
-                constants = Rescue.sample_constants(F, m, randomness)
-                break
-            except BufferError:
-                continue
-
-        constants_matrix = matrix([[constants[i*m+j] for j in range(0,m)] for i in range(0,m)])
-        initial_constant = matrix([[constants[m^2+i]] for i in range(0, m)])
-        constants_constant = matrix([[constants[m+m^2+i]] for i in range(0,m)])
-        return initial_constant, constants_matrix, constants_constant
-
-    # sample the given number of constants randomly from the given
-    # field using the randomness provided; if there is not enough
-    # randomness, throw a buffer error
-    @staticmethod
-    def sample_constants( F, m, randomness ):
-        counter = 0
-        constants = []
-        chunk_size = ceil(log(1.0*F.order(),2.0) / 8 ) + 1
-        while len(constants) != 2*m + m^2:
-            have_constant = False
-            while not have_constant:
-                if counter+chunk_size > len(randomness):
-                    raise BufferError
-                constant = Rescue.field_element_from_bytes(F, randomness[counter:(counter+chunk_size)])
-                counter += chunk_size
-
-                # only if the sampled constant is not in any
-                # subfields do we accept it
-                if Rescue.is_generator(F, constant):
-                    constants.append(constant)
-                    have_constant = True
-
-            # if the m^2 first constants do not
-            # define an invertible matrix, reject them
-            if len(constants) == m^2:
-                mat = matrix([[constants[i*m+j] for j in range(0,m)] for i in range(0,m)])
-                if not mat.is_invertible():
-                    constants = []
-        return constants
-
-    # decide if a given element generates the entire field (and not
-    # just a subfield)
-    @staticmethod
-    def is_generator( F, constant ):
-        p = F.characteristic()
-        deg = F.modulus().degree()
-        factorization = factor(deg)
-        # for all possible subfield orders, try raising to the power order
-        for fact, multiplicity in factorization:
-            if constant^(p^(deg/fact)) == constant: # if that power sends the element to itself, it generates only the subfield
-                return False
-        # all tests succeed
-        return True
-
-    # print the parameters
-    def Parameters( self ):
-        print("# Parameters")
-        print("security level:", self.security_level)
-        print("q:", self.F.order(), "\tm:", self.m, "\tNb:", self.Nb)
-        # print("rate:", self.rate, "\tcapacity:", self.capacity)
-        print("field:", self.F)
-        print("initial constant:\n", self.initial_constant)
-        print("constants matrix:\n", self.constants_matrix)
-        print("constants constant:\n", self.constants_constant)
-        print("alpha:\n", self.alpha)
-
-    # evaluate the block cipher in forward direction
-    def BlockCipher( self, key, ptxt ):
-        key_state = key
-        data_state = ptxt
-
-        key_injection = self.initial_constant
-        key_state += key_injection
-        data_state += key_state
-
-        for r in range(0, 2*self.Nb):
-            if r % 2 == 0:
-                for i in range(0,self.m):
-                    key_state[i,0] = key_state[i,0]^self.invalpha
-                    data_state[i,0] = data_state[i,0]^self.invalpha
-            else:
-                for i in range(0,self.m):
-                    key_state[i,0] = key_state[i,0]^self.alpha
-                    data_state[i,0] = data_state[i,0]^self.alpha
-            key_injection = self.constants_matrix * key_injection + self.constants_constant
-            key_state = self.MDS * key_state + key_injection
-            data_state = self.MDS * data_state + key_state
-
-        return data_state
-
-    # evaluate the sponge function WITHOUT padding
-    def Sponge( self, inputs, rate ):
-        key = matrix(self.F, [[self.F.zero()]] * self.m)
-        state = matrix(self.F, [[self.F.zero()]] * self.m)
-        for i in range(0, len(inputs), rate):
-            for j in range(min(rate, len(inputs)-i)):
-                state[j,0] += inputs[j+i]
-            state = self.BlockCipher(key, state)
-
-        outputs = []
-        for i in range(0, rate):
-            outputs.append(state[i%rate,0])
-
-        return outputs
-
-# S = 128 # Security level
-# field_size = 129 # Size of the base field
-# p = random_prime(2^n-1,False,2^(n-1)) # A prime of bitsize n
-# m = 12 # Number of base field elements
-# c = 2 # Number of elements dedicated to the capacity
-# alpha = 3 # Exponent for Rescue's power map
-# vision = Vision(S, m*field_size, m)
-# field = vision.F
-# plaintext = [field.random_element() for i in range(m-c)]
-# print("Vision instance: ", vision, " and an evaluation (without padding): ", Vision.Sponge(vision, plaintext, m-c))
-#
-# rescue = Rescue(S, p, m, alpha)
-# field = rescue.F
-# plaintext = [field.random_element() for i in range(m-c)]
-# print("Rescue instance: ", rescue, " and an evaluation (without padding): ", Rescue.Sponge(rescue, plaintext, m-c))
+vision = Vision()
+print("Vision instance: ")
+vision.Parameters()
